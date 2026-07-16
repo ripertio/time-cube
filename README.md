@@ -1,3 +1,4 @@
+# WIP
 # Time Cube — ESP32-S3 Based Physical Time Tracker
 
 A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orientation sensor. Flip the cube to switch between activity categories — no app, no cloud, no phone required. Logs are exported via a local web interface.
