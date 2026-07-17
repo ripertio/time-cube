@@ -1,7 +1,6 @@
-# WIP
-# Time Cube — ESP32-S3 Based Physical Time Tracker
+# WIP: Time Cube — ESP32-S3 Based Physical Time Tracker
 
-A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orientation sensor. Flip the cube to switch between activity categories — no app, no cloud, no phone required. Logs are exported via a local web interface.
+A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orientation sensor. Flip the cube to switch between activity categories — no app, no cloud, no phone required. Logs are exported via a local web interface and stored on the ESP, or exported to your device
 
 ## Features
 
@@ -10,6 +9,9 @@ A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orienta
 - **Open source** — fully customizable via ESPHome
 - **LED status feedback** — onboard WS2812B RGB LED indicates connection and tracking state
 - **Battery powered** — LiPo with TP4056 charging circuit
+
+## Current State
+
 
 ---
 
@@ -21,9 +23,8 @@ A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orienta
 | IMU          | MPU-6050 (I2C)                 |
 | LED          | Onboard WS2812B                |
 | Battery      | LiPo 400–500 mAh               |
-| Charger      | TP4056 with protection circuit |
 | Power Switch | Sliding Switch                 |
-| Enclosure    | 3D-printed, ~5×5×5 cm         |
+| Enclosure    | 3D-printed, ~5×5×5 cm          |
 
 ### Wiring (I2C)
 
@@ -33,6 +34,7 @@ A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orienta
 | SCL          | GPIO 9       |
 | VCC          | 3.3V         |
 | GND          | GND          |
+| Reset Button | GPIO         |
 
 > Adjust GPIO pins to match your specific wiring if different.
 
@@ -84,7 +86,7 @@ To find your cube's hostname or IP:
 1. Open `http://timecube.local` (or the cube's IP) in a browser
 2. Configure which activity each face represents
 3. Flip the cube to start tracking — the active face is logged automatically
-4. Export your time logs from the web interface
+4. Export your time logs from the web interface (e.g. http://timecube.local/text_sensor/csv_export)
 
 ---
 
