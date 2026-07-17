@@ -115,6 +115,7 @@
     <input type="text" id="csv-url" placeholder="http://timecube.local/text_sensor/csv_export" autocomplete="off" />
     <button class="btn btn-primary" onclick="loadData(true)">Load</button>
     <button class="btn btn-ghost" onclick="togglePaste()">Paste JSON</button>
+    <button class="btn btn-ghost" id="btn-download" style="display:none" onclick="downloadCSV()">⬇ Download CSV</button>
     <button class="btn btn-ghost" onclick="clearCache()">Clear Cache</button>
   </div>
   <div id="paste-area" style="display:none; margin-bottom:0.75rem;">
@@ -458,6 +459,7 @@ function processRows(rows, fetchedAt, fromCache) {
   renderMonth(months[months.length - 1]); // show latest month by default
 
   document.getElementById('main-content').style.display = 'block';
+  document.getElementById('btn-download').style.display = '';
 }
 
 function togglePaste() {
@@ -482,11 +484,29 @@ function loadFromPaste() {
   document.getElementById('paste-area').style.display = 'none';
 }
 
+function downloadCSV() {
+  if (!allRows.length) return;
+  const header = 'timestamp,seite,aktivitaet,dauer_sek';
+  const lines = allRows.map(r => [
+    r.timestamp.toISOString().slice(0, 19).replace('T', 'T'),
+    r.seite,
+    r.aktivitaet,
+    r.dauer_sek
+  ].join(','));
+  const blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `timecube_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function clearCache() {
   localStorage.removeItem(CACHE_URL);
   localStorage.removeItem(CACHE_DATA);
   localStorage.removeItem(CACHE_TIME);
   document.getElementById('main-content').style.display = 'none';
+  document.getElementById('btn-download').style.display = 'none';
   document.getElementById('meta-line').textContent = 'Cache cleared.';
   document.getElementById('csv-url').value = '';
   showError('');
