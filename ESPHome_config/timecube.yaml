@@ -1,0 +1,521 @@
+esphome:
+  name: timecube
+  friendly_name: Time Cube
+  
+  includes:
+    - timecube_storage.h
+  
+  on_boot:
+   - priority: -100
+     then:
+       - lambda: |-
+          ESP_LOGI("timecube", "Time Cube gestartet!");
+          setup_littlefs();
+          load_config();
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+  partitions: partitions_timecube.csv
+
+# ... (Rest bleibt EXAKT GLEICH wie vorher!)
+
+# WiFi Configuration (keine hardcoded Credentials!)
+wifi:
+  ap:
+    ssid: "TimeCube Setup"
+    password: ""
+  on_connect:
+    then:
+      - lambda: |-
+          id(wifi_connected) = true;
+          id(wifi_ever_connected) = true;
+  on_disconnect:
+    then:
+      - lambda: |-
+          id(wifi_connected) = false;
+
+# Captive Portal für WiFi Setup
+captive_portal:
+
+# Improv Serial für USB-Setup über Browser
+improv_serial:
+
+# Enable logging
+logger:
+  level: INFO # DEBUG
+  logs:
+    mpu6050: INFO
+    sensor: INFO
+    web_server: INFO
+
+
+api:
+  services:
+    # Namen ändern
+    - service: set_activity_name
+      variables:
+        side: int
+        name: string
+      then:
+        - lambda: |-
+            set_activity_name(side, name);
+            id(activity_side_1).update();
+            id(activity_side_2).update();
+            id(activity_side_3).update();
+            id(activity_side_4).update();
+            id(activity_side_5).update();
+            id(activity_side_6).update();
+    
+    # CSV Export triggern
+    - service: export_csv
+      then:
+        - lambda: |-
+            id(csv_export).update();
+    
+    # Log löschen
+    - service: clear_log
+      then:
+        - lambda: |-
+            clear_log();
+            id(csv_export).update();
+            id(log_count).update();
+# Enable OTA updates
+ota:
+
+# Web Server for Dashboard + WiFi Management
+web_server:
+  port: 80
+  version: 3
+
+# Time Component (NTP)
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Berlin
+
+# I2C Bus for MPU-6050
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+  frequency: 100kHz
+  
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    pin:
+      number: 48
+    num_leds: 1
+    chipset: WS2812
+    rgb_order: GRB
+    name: "Status LED"
+    default_transition_length: 0s
+
+
+# MPU-6050 Sensor
+sensor:
+  - platform: mpu6050
+    address: 0x68
+    update_interval: 200ms
+    accel_x:
+      name: "Accel X"
+      id: accel_x
+      internal: true
+    accel_y:
+      name: "Accel Y"
+      id: accel_y
+      internal: true
+    accel_z:
+      name: "Accel Z"
+      id: accel_z
+      internal: true
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+
+  - platform: template
+    name: "Current Side"
+    id: current_side
+    update_interval: 3s
+    lambda: |-
+      float x = id(accel_x).state;
+      float y = id(accel_y).state;
+      float z = id(accel_z).state;
+      
+      if (z > 8.0) return 1;
+      if (z < -8.0) return 2;
+      if (y > 8.0) return 3;
+      if (y < -8.0) return 4;
+      if (x > 8.0) return 5;
+      if (x < -8.0) return 6;
+      
+      return id(current_side).state;
+    on_value:
+      then:
+        - script.execute: handle_side_change
+
+  - platform: template
+    name: "Activity Duration"
+    id: activity_duration
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+  
+  # ← HIER FEHLT LOG COUNT!
+  - platform: template
+    name: "Log Count"
+    id: log_count
+    update_interval: 60s
+    accuracy_decimals: 0
+    lambda: |-
+      return get_log_count();
+
+# Text Sensor for Activity Name
+text_sensor:
+  - platform: template
+    name: "Current Activity"
+    id: current_activity
+    update_interval: never
+    lambda: |-
+      int side = (int)id(current_side).state;
+      return get_activity_name(side);
+  
+  # CSV Export
+  - platform: template
+    name: "CSV Export"
+    id: csv_export
+    update_interval: never
+    lambda: |-
+      return get_csv_content();
+  
+  # Seitennamen als Text Sensors
+  - platform: template
+    name: "Activity Side 1"
+    id: activity_side_1
+    internal: true
+    update_interval: 60s
+    lambda: |-
+      return get_activity_name(1);
+  
+  - platform: template
+    name: "Activity Side 2"
+    id: activity_side_2
+    internal: true
+    update_interval: 60s
+    lambda: |-
+      return get_activity_name(2);
+  
+  - platform: template
+    name: "Activity Side 3"
+    id: activity_side_3
+    internal: true
+    update_interval: 60s
+    lambda: |-
+      return get_activity_name(3);
+  
+  - platform: template
+    name: "Activity Side 4"
+    id: activity_side_4
+    internal: true
+    update_interval: 60s
+    lambda: |-
+      return get_activity_name(4);
+  
+  - platform: template
+    name: "Activity Side 5"
+    id: activity_side_5
+    internal: true
+    update_interval: 60s
+    lambda: |-
+      return get_activity_name(5);
+  
+  - platform: template
+    name: "Activity Side 6"
+    id: activity_side_6
+    internal: true
+    update_interval: 60s
+    lambda: |-
+      return get_activity_name(6);
+      
+
+# Binary Sensor for WiFi Status
+binary_sensor:
+  - platform: status
+    name: "Status"
+
+# Button to Reset WiFi
+button:
+  - platform: restart
+    name: "Restart"
+  
+  - platform: factory_reset
+    name: "WiFi Reset (Factory Reset)"
+    id: wifi_reset_button
+
+  - platform: template
+    name: "CSV Aktualisieren"
+    on_press:
+      then:
+        - lambda: |-
+            id(csv_export).update();
+            id(log_count).update();
+
+  - platform: template
+    name: "Log Loeschen"
+    on_press:
+      then:
+        - lambda: |-
+            clear_log();
+            id(csv_export).update();
+            id(log_count).update();
+
+# Editierbare Textfelder fuer Aktivitaetsnamen (sichtbar im Web-UI)
+text:
+  - platform: template
+    name: "Seite 1 Name"
+    id: name_input_1
+    mode: text
+    lambda: return {activity_names[1]};
+    set_action:
+      lambda: |-
+        set_activity_name(1, x);
+        id(activity_side_1).update();
+        id(current_activity).update();
+
+  - platform: template
+    name: "Seite 2 Name"
+    id: name_input_2
+    mode: text
+    lambda: return {activity_names[2]};
+    set_action:
+      lambda: |-
+        set_activity_name(2, x);
+        id(activity_side_2).update();
+        id(current_activity).update();
+
+  - platform: template
+    name: "Seite 3 Name"
+    id: name_input_3
+    mode: text
+    lambda: return {activity_names[3]};
+    set_action:
+      lambda: |-
+        set_activity_name(3, x);
+        id(activity_side_3).update();
+        id(current_activity).update();
+
+  - platform: template
+    name: "Seite 4 Name"
+    id: name_input_4
+    mode: text
+    lambda: return {activity_names[4]};
+    set_action:
+      lambda: |-
+        set_activity_name(4, x);
+        id(activity_side_4).update();
+        id(current_activity).update();
+
+  - platform: template
+    name: "Seite 5 Name"
+    id: name_input_5
+    mode: text
+    lambda: return {activity_names[5]};
+    set_action:
+      lambda: |-
+        set_activity_name(5, x);
+        id(activity_side_5).update();
+        id(current_activity).update();
+
+  - platform: template
+    name: "Seite 6 Name"
+    id: name_input_6
+    mode: text
+    lambda: return {activity_names[6]};
+    set_action:
+      lambda: |-
+        set_activity_name(6, x);
+        id(activity_side_6).update();
+        id(current_activity).update();
+
+# Global Variables
+globals:
+  - id: last_side
+    type: int
+    restore_value: no
+    initial_value: '0'
+  
+  - id: pending_side
+    type: int
+    restore_value: no
+    initial_value: '0'
+  
+  - id: debounce_start
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+  
+  - id: activity_start
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+  
+  - id: is_debouncing
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  
+  - id: wifi_connected
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: wifi_ever_connected
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: green_flash_until
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+  - id: led_override_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+    
+
+# Scripts
+script:
+  - id: handle_side_change
+    then:
+      - lambda: |-
+          int new_side = (int)id(current_side).state;
+          
+          // Kein Unterschied zur aktuell bestätigten Seite -> nichts zu tun
+          if (new_side == id(last_side)) return;
+          
+          // Nur Timer (neu) starten, wenn wir noch nicht schon auf genau diese Seite debouncen
+          if (!id(is_debouncing) || new_side != id(pending_side)) {
+            id(pending_side) = new_side;
+            id(debounce_start) = millis();
+            id(is_debouncing) = true;
+            ESP_LOGI("timecube", "Debounce started: %d -> %d", id(last_side), new_side);
+          }
+
+  # Wird alle 500ms vom interval aufgerufen, prüft ob Debounce abgelaufen ist
+  - id: check_debounce
+    then:
+      - lambda: |-
+          if (!id(is_debouncing)) return;
+          
+          int current = (int)id(current_side).state;
+          
+          // Seite hat sich während der Debounce-Zeit nochmal geändert
+          if (current != id(pending_side)) {
+            id(pending_side) = current;
+            id(debounce_start) = millis();
+            return;
+          }
+          
+          // 2s stabil? -> bestätigen
+          if (millis() - id(debounce_start) > 2000) {
+            id(is_debouncing) = false;
+            
+            unsigned long duration = 0;
+            if (id(activity_start) > 0) {
+              duration = (millis() - id(activity_start)) / 1000;
+              id(activity_duration).publish_state(duration);
+              
+              log_activity(id(last_side), duration);
+              id(csv_export).update();
+              id(log_count).update();
+            }
+            
+            id(last_side) = current;
+            id(green_flash_until) = millis() + 5000;
+            id(activity_start) = millis();
+            id(current_activity).update();
+            
+            ESP_LOGI("timecube", "Side confirmed: %d (%s)", current, id(current_activity).state.c_str());
+          }
+  - id: update_led
+    then:
+      - lambda: |-
+          ESP_LOGD("timecube", "update_led: wifi=%d debounce=%d green_until=%lu now=%lu", 
+           id(wifi_connected), id(is_debouncing), id(green_flash_until), millis());
+          
+          if (id(led_override_active)) return;  // Reminder-Blinken läuft, nicht stören
+
+          // WiFi nicht verbunden
+          if (!id(wifi_connected)) {
+            unsigned long period = id(wifi_ever_connected) ? 300 : 1000; // rot schnell / gelb langsam
+            bool on_phase = (millis() % period) < (period / 2);
+            auto call = id(status_led).turn_on();
+            if (on_phase) {
+              if (id(wifi_ever_connected)) call.set_rgb(1.0f, 0.0f, 0.0f);   // Rot
+              else call.set_rgb(1.0f, 0.75f, 0.0f);                          // Gelb
+              call.set_brightness(1.0f);
+            } else {
+              call.set_state(false);
+            }
+            call.perform();
+            return;
+          }
+
+          // Seitenwechsel erkannt -> Grün, 5s an
+          if (millis() < id(green_flash_until)) {
+            auto call = id(status_led).turn_on();
+            call.set_rgb(0.0f, 1.0f, 0.0f);
+            call.set_brightness(1.0f);
+            call.perform();
+            return;
+          }
+
+          // Debounce läuft -> Weiß gedimmt
+          if (id(is_debouncing)) {
+            auto call = id(status_led).turn_on();
+            call.set_rgb(1.0f, 1.0f, 1.0f);
+            call.set_brightness(0.15f);
+            call.perform();
+            return;
+          }
+
+          // Bereit -> Aus
+          auto call = id(status_led).turn_off();
+          call.perform();
+
+  - id: reminder_25min
+    then:
+      - lambda: 'id(led_override_active) = true;'
+      - repeat:
+          count: 3
+          then:
+            - light.turn_on:
+                id: status_led
+                red: 0%
+                green: 0%
+                blue: 100%
+                brightness: 100%
+            - delay: 200ms
+            - light.turn_off: status_led
+            - delay: 200ms
+      - lambda: 'id(led_override_active) = false;'
+      - lambda: |-
+          ESP_LOGI("timecube", "25-min Reminder!");
+
+# Intervals
+interval:
+  - interval: 100ms
+    then:
+      - script.execute: update_led
+
+  - interval: 500ms
+    then:
+      - script.execute: check_debounce
+
+  - interval: 25min
+    then:
+      - script.execute: reminder_25min
