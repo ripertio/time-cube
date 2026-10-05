@@ -12,9 +12,9 @@ corner_margin = 8;   // distance of screw centers from each side edge [mm]
 insert_d = 3.5;       // heat-set insert hole diameter (base) [mm]
 insert_depth = 3;     // heat-set insert hole depth (base) [mm]
 
-screw_clear_d = 2.8;  // M2.5 clearance hole diameter (cover) [mm]
-screw_head_d = 4.5;   // M2.5 hex socket head diameter, for counterbore (cover) [mm]
-screw_head_depth = 1.8; // counterbore depth so the head sits flush/below surface (cover) [mm]
+screw_clear_d = 2.2;  // M2 clearance hole diameter (cover) [mm]
+screw_head_d = 8;     // flat screw head diameter, for counterbore (cover) [mm]
+screw_head_depth = 0.8; // flat screw head thickness and counterbore depth (cover) [mm]
 
 inner_cavity_depth = 28; // height of the upper internal cavity where the parts sit [mm]
 inner_cavity_wall = 2;   // wall thickness around the internal cavity [mm]
@@ -240,32 +240,34 @@ module base() {
 }
 
 module cover() {
-    difference() {
-        intersection() {
-            rounded_cube(size, corner_r);
-            translate([-1, -1, size - split_h])
-                cube([size + 2, size + 2, split_h + 1]);
+    union() {
+        difference() {
+            intersection() {
+                rounded_cube(size, corner_r);
+                translate([-1, -1, size - split_h])
+                    cube([size + 2, size + 2, split_h + 1]);
+            }
+            // through holes for M2 screws, counterbored for 8mm-diameter flat heads
+            for (p = corner_positions) {
+                translate([p[0], p[1], size - split_h - 1])
+                    cylinder(d = screw_clear_d, h = split_h + 2, $fn = 32);
+                translate([p[0], p[1], size - screw_head_depth + 0.01])
+                    cylinder(d = screw_head_d, h = screw_head_depth + 1, $fn = 32);
+            }
+            // USB-C charging slot, straight through the cover, above the ESP's socket
+            translate([usbc_x_center, usbc_y_center, size - split_h / 2])
+                stadium_slot(usbc_slot_length, usbc_slot_width, split_h + 2);
+            // Underside reliefs clear the rotated terminals; the cover still bears on
+            // each control body's top face and retains it in its pocket.
+            translate([switch_terminal_x_min, switch_y_center - switch_pin_channel_width / 2, size - split_h - 0.01])
+                cube([switch_body_x_min - switch_terminal_x_min, switch_pin_channel_width, 1.1]);
+            translate([button_terminal_x_min, button_y_center - button_pin_size / 2, button_z_center + button_pin_offset_z - button_pin_size / 2])
+                cube([button_body_x_min - button_terminal_x_min, button_pin_size, button_pin_size]);
         }
-        // through holes for M2.5 hex screws, counterbored so heads sit flush
-        for (p = corner_positions) {
-            translate([p[0], p[1], size - split_h - 1])
-                cylinder(d = screw_clear_d, h = split_h + 2, $fn = 32);
-            translate([p[0], p[1], size - screw_head_depth + 0.01])
-                cylinder(d = screw_head_d, h = screw_head_depth + 1, $fn = 32);
-        }
-        // snap-fit tabs on the lid underside
+        // Protruding snap tabs engage the matching clearance recesses in the base.
         for (p = snap_positions)
             translate([p[0], p[1], size - split_h - snap_tab_height])
                 cube([snap_tab_width, snap_tab_depth, snap_tab_height]);
-        // USB-C charging slot, straight through the cover, above the ESP's socket
-        translate([usbc_x_center, usbc_y_center, size - split_h / 2])
-            stadium_slot(usbc_slot_length, usbc_slot_width, split_h + 2);
-        // Underside reliefs clear the rotated terminals; the cover still bears on
-        // each control body's top face and retains it in its pocket.
-        translate([switch_terminal_x_min, switch_y_center - switch_pin_channel_width / 2, size - split_h - 0.01])
-            cube([switch_body_x_min - switch_terminal_x_min, switch_pin_channel_width, 1.1]);
-        translate([button_terminal_x_min, button_y_center - button_pin_size / 2, button_z_center + button_pin_offset_z - button_pin_size / 2])
-            cube([button_body_x_min - button_terminal_x_min, button_pin_size, button_pin_size]);
     }
 }
 
