@@ -7,6 +7,10 @@ corner_r = 3;        // corner/edge rounding radius [mm]
 split_h = 3;         // height of the cover slice, measured parallel to the top edge [mm]
 gap = 90;            // visual separation between base and cover when previewing
 
+// Manifold repair epsilon: prevents z-fighting artifacts in OpenSCAD rendering
+eps = 0.01;          // small overlap/clearance to avoid floating-point precision issues
+eps2 = 0.02;         // double epsilon for larger relief cuts
+
 corner_margin = 8;   // distance of screw centers from each side edge [mm]
 
 insert_d = 3.5;       // heat-set insert hole diameter (base) [mm]
@@ -42,7 +46,7 @@ esp_width = 18.5;          // ESP32-S3-mini board width, along X [mm]
 esp_pcb_height = 1.4;      // bare PCB thickness -> width (Y) of the bottom registration shelf [mm]
 esp_pcba_height = 5;       // populated PCBA thickness -> width (Y) of the main clearance slot [mm]
 esp_register_height = 1;   // height (Z) of the bottom registration shelf that grips the bare board edge [mm]
-esp_gap_from_mpu = 10;     // gap between the MPU pocket and the ESP pocket, along Y [mm]
+esp_gap_from_mpu = 15;     // gap between the MPU pocket and the ESP pocket, along Y [mm]
 
 // Controls are mounted on their sides. They drop into top-open body pockets near
 // X=size; their actuators point through openings in that outer wall.
@@ -55,7 +59,7 @@ switch_pin_channel_width = 1.8; // terminal wire channel width, along Y [mm]
 switch_access_length = 7;      // side slot length, along Z [mm]
 switch_access_width = 1.8;     // actuator channel width, along Y [mm]
 switch_side_wall_thickness = 2; // remaining outer wall thickness at the switch [mm]
-button_side_wall_thickness = 0.4; // remaining outer wall thickness at the button [mm]
+button_side_wall_thickness = 0.6; // remaining outer wall thickness at the button [mm]
 
 // 3x6x4.5mm tactile button, laid on its side and top-loaded. The 4.5mm
 // dimension faces X; the actuator points out through the X=size wall.
@@ -93,6 +97,7 @@ cable_channel_depth = 20;     // channel depth (Z) below the mating face [mm]
 cable_channel_y_start = esp_y_start + esp_pcba_height - 0.5; // overlap into the ESP slot slightly
 cable_channel_y_end = mpu_y_start + 0.5;                   // overlap into the MPU slot slightly
 cable_channel_length = cable_channel_y_end - cable_channel_y_start; // spans the ESP/MPU gap with grip overlap
+cable_channel_relief_length = mpu_y_start - cable_channel_y_start - 2; // stop side relief at the MPU pocket edge
 
 // USB-C charging slot in the cover, above the ESP32-S3-mini's top edge, where its
 // USB-C socket is soldered face-up on the PCB -- long axis runs along X (board width).
@@ -106,10 +111,15 @@ switch_y_center = row_y_center + 1;
 button_y_center = switch_y_center + switch_width / 2 + 1.5 + button_width / 2;
 switch_z_center = size - split_h - switch_length / 2;
 button_z_center = size - split_h - button_length / 2;
-// Extend the switch slot to the cover seam, keeping its original lower edge.
-// The half-width overrun makes the slot full-width where it meets the seam.
-switch_access_cut_length = size - split_h - (switch_z_center - switch_access_length / 2) + switch_access_width / 2;
-switch_access_cut_z_center = switch_z_center - switch_access_length / 2 + switch_access_cut_length / 2;
+
+// Switch slot extends upward to the cover seam, keeping its original lower edge.
+// The slot bottom sits at (switch_z_center - switch_access_length/2).
+// We extend it upward to the mating face, creating an overrun that makes
+// the slot full-width (access_width → full width via half-width chamfer).
+switch_slot_bottom_z = switch_z_center - switch_access_length / 2;
+switch_slot_top_z = size - split_h;  // mating face (cover seam)
+switch_access_cut_length = switch_slot_top_z - switch_slot_bottom_z + switch_access_width / 2;
+switch_access_cut_z_center = switch_slot_bottom_z + switch_access_cut_length / 2;
 
 // Wiring connectors (base only): shallow trenches connect top-loaded control
 // terminals to the side corridor and then the existing interconnect cable channel.
@@ -186,7 +196,7 @@ module base() {
         }
         // blind holes for heat-set inserts, drilled down from the mating face
         for (p = corner_positions)
-            translate([p[0], p[1], size - split_h - insert_depth + 0.01])
+            translate([p[0], p[1], size - split_h - insert_depth + eps])
                 cylinder(d = insert_d, h = insert_depth, $fn = 32);
         // matching recesses for the lid snap tabs
         for (p = snap_positions)
@@ -194,52 +204,56 @@ module base() {
                 cube([snap_tab_width + snap_recess_extra, snap_tab_depth + snap_recess_extra, snap_tab_height + 0.4]);
         // battery pocket, open at the mating face, centered in X, offset toward one Y side
         translate([(size - battery_length) / 2, battery_offset_y, size - split_h - battery_depth])
-            cube([battery_length, battery_width, battery_depth + 0.01]);
+            cube([battery_length, battery_width, battery_depth + eps]);
         // MPU sensor board pocket: a vertical slot, open only at the mating (top) face,
         // closed at the bottom. A narrow registration shelf at the very bottom grips
         // the bare PCB edge; the wider clearance slot above it (reaching all the way
         // to the top) gives the populated board room, so the header/socket at the
         // top of the board can be plugged in from above.
         translate([(size - mpu_width) / 2, mpu_y_center - mpu_pcb_height / 2, size - split_h - mpu_length])
-            cube([mpu_width, mpu_pcb_height, mpu_register_height + 0.01]);
-        translate([(size - mpu_width) / 2, mpu_y_center - mpu_pcba_height / 2, size - split_h - mpu_length + mpu_register_height - 0.01])
-            cube([mpu_width, mpu_pcba_height, mpu_length - mpu_register_height + 0.02]);
+            cube([mpu_width, mpu_pcb_height, mpu_register_height + eps]);
+        translate([(size - mpu_width) / 2, mpu_y_center - mpu_pcba_height / 2, size - split_h - mpu_length + mpu_register_height - eps])
+            cube([mpu_width, mpu_pcba_height, mpu_length - mpu_register_height + eps2]);
         // ESP32-S3-mini pocket: same vertical-slot style as the MPU pocket,
         // but mirrored 180° around its center so the USB-side of the board faces the
         // opposite side of the cube from the LED-side placement.
         translate([size / 2, esp_y_center, size - split_h - esp_length])
             rotate([0, 0, 180])
                 translate([-esp_width / 2, -esp_pcb_height / 2, 0])
-                    cube([esp_width, esp_pcb_height, esp_register_height + 0.01]);
-        translate([size / 2, esp_y_center, size - split_h - esp_length + esp_register_height - 0.01])
+                    cube([esp_width, esp_pcb_height, esp_register_height + eps]);
+        translate([size / 2, esp_y_center, size - split_h - esp_length + esp_register_height - eps])
             rotate([0, 0, 180])
                 translate([-esp_width / 2, -esp_pcba_height / 2, 0])
-                    cube([esp_width, esp_pcba_height, esp_length - esp_register_height + 0.02]);
+                    cube([esp_width, esp_pcba_height, esp_length - esp_register_height + eps2]);
         // cable channel connecting the MPU and ESP pockets, for the interconnect wires
         translate([(size - cable_channel_width) / 2, cable_channel_y_start, size - split_h - cable_channel_depth])
-            cube([cable_channel_width, cable_channel_length, cable_channel_depth + 0.01]);
+            cube([cable_channel_width, cable_channel_length, cable_channel_depth + eps]);
+        // Widen only the high-X side to wiring-trench depth. Stop at the MPU
+        // pocket edge to preserve its holder; length follows the board spacing.
+        translate([size / 2, cable_channel_y_start, size - split_h - wire_depth])
+            cube([esp_width / 2, cable_channel_relief_length, wire_depth + eps]);
         // Side openings for the switch slider and tactile-button actuator
-        side_stadium_slot(size - switch_side_wall_thickness, switch_y_center, switch_access_cut_z_center, switch_access_cut_length, switch_access_width, switch_side_wall_thickness + 0.02);
-        side_stadium_slot(size - button_side_wall_thickness, button_y_center, button_z_center, button_actuator_length, button_actuator_width, button_side_wall_thickness + 0.02);
+        side_stadium_slot(size - switch_side_wall_thickness, switch_y_center, switch_access_cut_z_center, switch_access_cut_length, switch_access_width, switch_side_wall_thickness + eps2);
+        side_stadium_slot(size - button_side_wall_thickness, button_y_center, button_z_center, button_actuator_length, button_actuator_width, button_side_wall_thickness + eps2);
         // Top-loaded, side-oriented switch body and inward terminal clearance
         translate([switch_body_x_min, switch_y_center - (switch_width + switch_fit_clearance) / 2, size - split_h - switch_length])
-            cube([switch_body_depth + switch_fit_clearance, switch_width + switch_fit_clearance, switch_length + 0.01]);
+            cube([switch_body_depth + switch_fit_clearance, switch_width + switch_fit_clearance, switch_length + eps]);
         translate([switch_terminal_x_min, switch_y_center - switch_pin_channel_width / 2, size - split_h - wire_depth])
-            cube([switch_body_x_min - switch_terminal_x_min + 0.01, switch_pin_channel_width, wire_depth + 0.01]);
+            cube([switch_body_x_min - switch_terminal_x_min + eps, switch_pin_channel_width, wire_depth + eps]);
         // Top-loaded 3x6x4.5mm button body and two inward-facing terminal clearances
         translate([button_body_x_min, button_y_center - (button_width + button_fit_clearance) / 2, size - split_h - button_length])
-            cube([button_side_depth + button_fit_clearance, button_width + button_fit_clearance, button_length + 0.01]);
+            cube([button_side_depth + button_fit_clearance, button_width + button_fit_clearance, button_length + eps]);
         for (pz = [button_z_center - button_pin_offset_z, button_z_center + button_pin_offset_z])
             let(pin_channel_z_min = pz - button_pin_size / 2)
                 translate([button_terminal_x_min, button_y_center - button_pin_size / 2, pin_channel_z_min])
-                    cube([button_body_x_min - button_terminal_x_min + 0.01, button_pin_size, size - split_h - pin_channel_z_min + 0.01]);
+                    cube([button_body_x_min - button_terminal_x_min + eps, button_pin_size, size - split_h - pin_channel_z_min + eps]);
         // wiring: side corridor running past the MPU/ESP boards (clear of both
         // footprints), from the battery's back edge down to the switch/button row
         translate([corridor_x_min, corridor_y_start, size - split_h - wire_depth])
-            cube([corridor_width, corridor_y_end - corridor_y_start, wire_depth + 0.01]);
+            cube([corridor_width, corridor_y_end - corridor_y_start, wire_depth + eps]);
         // wiring: spur connecting the corridor to the cable_channel (battery's cables)
         translate([spur_battery_x_start, spur_battery_y_center - spur_battery_width / 2, size - split_h - wire_depth])
-            cube([corridor_x_min - spur_battery_x_start, spur_battery_width, wire_depth + 0.01]);
+            cube([corridor_x_min - spur_battery_x_start, spur_battery_width, wire_depth + eps]);
     }
 }
 
@@ -255,7 +269,7 @@ module cover() {
             for (p = corner_positions) {
                 translate([p[0], p[1], size - split_h - 1])
                     cylinder(d = screw_clear_d, h = split_h + 2, $fn = 32);
-                translate([p[0], p[1], size - screw_head_depth + 0.01])
+                translate([p[0], p[1], size - screw_head_depth + eps])
                     cylinder(d = screw_head_d, h = screw_head_depth + 1, $fn = 32);
             }
             // USB-C charging slot, straight through the cover, above the ESP's socket
@@ -263,7 +277,7 @@ module cover() {
                 stadium_slot(usbc_slot_length, usbc_slot_width, split_h + 2);
             // Underside reliefs clear the rotated terminals; the cover still bears on
             // each control body's top face and retains it in its pocket.
-            translate([switch_terminal_x_min, switch_y_center - switch_pin_channel_width / 2, size - split_h - 0.01])
+            translate([switch_terminal_x_min, switch_y_center - switch_pin_channel_width / 2, size - split_h - eps])
                 cube([switch_body_x_min - switch_terminal_x_min, switch_pin_channel_width, 1.1]);
             translate([button_terminal_x_min, button_y_center - button_pin_size / 2, button_z_center + button_pin_offset_z - button_pin_size / 2])
                 cube([button_body_x_min - button_terminal_x_min, button_pin_size, button_pin_size]);
@@ -276,5 +290,6 @@ module cover() {
 }
 
 base();
-translate([0, 0, split_h + gap])
-    cover();
+translate([size +5 , 0, size])
+    mirror([0, 0, 1])
+        cover();
