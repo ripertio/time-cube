@@ -52,16 +52,16 @@ switch_body_depth = 4;       // switch body depth, along X [mm]
 switch_fit_clearance = 0.4;    // total clearance around the switch body [mm]
 switch_pin_height = 5;         // terminal clearance depth inward from the body [mm]
 switch_pin_channel_width = 1.8; // terminal wire channel width, along Y [mm]
-switch_access_length = 5;      // side slot length, along Z [mm]
+switch_access_length = 7;      // side slot length, along Z [mm]
 switch_access_width = 1.8;     // actuator channel width, along Y [mm]
 switch_side_wall_thickness = 2; // remaining outer wall thickness at the switch [mm]
-button_side_wall_thickness = 0.6; // remaining outer wall thickness at the button [mm]
+button_side_wall_thickness = 0.4; // remaining outer wall thickness at the button [mm]
 
 // 3x6x4.5mm tactile button, laid on its side and top-loaded. The 4.5mm
 // dimension faces X; the actuator points out through the X=size wall.
 button_length = 6;              // body length, along Z when side-mounted [mm]
 button_width = 3.5;             // body width, along Y [mm]
-button_side_depth = 4.9;        // overall depth including actuator, along X [mm]
+button_side_depth = 3.9;        // overall depth including actuator, along X [mm]
 button_actuator_length = 3.2;   // actuator opening length including print clearance, along Z [mm]
 button_actuator_width = 1.8;    // actuator opening width including print clearance, along Y [mm]
 button_fit_clearance = 0.4;     // total clearance around the button body [mm]
@@ -106,12 +106,16 @@ switch_y_center = row_y_center + 1;
 button_y_center = switch_y_center + switch_width / 2 + 1.5 + button_width / 2;
 switch_z_center = size - split_h - switch_length / 2;
 button_z_center = size - split_h - button_length / 2;
+// Extend the switch slot to the cover seam, keeping its original lower edge.
+// The half-width overrun makes the slot full-width where it meets the seam.
+switch_access_cut_length = size - split_h - (switch_z_center - switch_access_length / 2) + switch_access_width / 2;
+switch_access_cut_z_center = switch_z_center - switch_access_length / 2 + switch_access_cut_length / 2;
 
 // Wiring connectors (base only): shallow trenches connect top-loaded control
 // terminals to the side corridor and then the existing interconnect cable channel.
 wire_depth = 8;              // depth (Z) of all wiring connectors, from the mating face [mm]
-wire_clearance = 0.4;        // clearance of the side corridor from the ESP pocket's edge [mm]
-corridor_width = 4.8;        // width of the side (Y-bar) corridor, along X [mm]
+wire_clearance = 0;        // clearance of the side corridor from the ESP pocket's edge [mm]
+corridor_width = 7;        // width of the side (Y-bar) corridor, along X [mm]
 corridor_x_min = size / 2 + esp_width / 2 + wire_clearance; // just clear of the wider (ESP) board
 corridor_y_start = battery_offset_y + battery_width;        // battery's back edge
 
@@ -215,7 +219,7 @@ module base() {
         translate([(size - cable_channel_width) / 2, cable_channel_y_start, size - split_h - cable_channel_depth])
             cube([cable_channel_width, cable_channel_length, cable_channel_depth + 0.01]);
         // Side openings for the switch slider and tactile-button actuator
-        side_stadium_slot(size - switch_side_wall_thickness, switch_y_center, switch_z_center, switch_access_length, switch_access_width, switch_side_wall_thickness + 0.02);
+        side_stadium_slot(size - switch_side_wall_thickness, switch_y_center, switch_access_cut_z_center, switch_access_cut_length, switch_access_width, switch_side_wall_thickness + 0.02);
         side_stadium_slot(size - button_side_wall_thickness, button_y_center, button_z_center, button_actuator_length, button_actuator_width, button_side_wall_thickness + 0.02);
         // Top-loaded, side-oriented switch body and inward terminal clearance
         translate([switch_body_x_min, switch_y_center - (switch_width + switch_fit_clearance) / 2, size - split_h - switch_length])
