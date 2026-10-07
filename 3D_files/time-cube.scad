@@ -59,19 +59,28 @@ switch_pin_channel_width = 1.8; // terminal wire channel width, along Y [mm]
 switch_access_length = 7;      // side slot length, along Z [mm]
 switch_access_width = 2.5;     // actuator channel width, along Y [mm]
 switch_side_wall_thickness = 1.2; // remaining outer wall thickness at the switch [mm]
-button_side_wall_thickness = 0.6; // remaining outer wall thickness at the button [mm]
+button_side_wall_thickness = 0.8; // flexure tongue thickness at the outer wall [mm]
 
 // 3x6x4.5mm tactile button, laid on its side and top-loaded. The 4.5mm
-// dimension faces X; the actuator points out through the X=size wall.
+// dimension faces X; the actuator points toward the X=size wall. A printed
+// cantilever in that wall presses the tactile actuator from outside.
 button_length = 6;              // body length, along Z when side-mounted [mm]
 button_width = 3.5;             // body width, along Y [mm]
 button_side_depth = 3.9;        // overall depth including actuator, along X [mm]
-button_actuator_length = 3.2;   // actuator opening length including print clearance, along Z [mm]
-button_actuator_width = 1.8;    // actuator opening width including print clearance, along Y [mm]
+button_actuator_length = 3.2;   // actuator length, along Z [mm]
+button_actuator_width = 1.8;    // actuator width, along Y [mm]
 button_fit_clearance = 0.4;     // total clearance around the button body [mm]
 button_pin_size = 1.6;          // 1.2mm terminal diameter plus print clearance [mm]
 button_pin_depth = 5.2;         // terminal clearance depth inward from the body [mm]
 button_pin_offset_z = 3.25;     // terminal pitch is 6.5mm, along Z when side-mounted [mm]
+
+// Flat side-wall flexure. Parallel through-slots isolate a flush tongue that
+// bends inward when pressed, with a relief pocket behind it for travel.
+button_flexure_length = 8;           // cantilever length from press zone to root [mm]
+button_flexure_slot_width = 0.5;      // width of the through-slots around the tongue [mm]
+button_flexure_track_spacing = 4.0;   // distance between slot centerlines [mm]
+button_flexure_clearance_depth = 0.8; // inward space behind tongue for flex [mm]
+button_flexure_clearance_side = 0.4;  // extra width of the relief behind the tongue [mm]
 
 // Y-axis layout: battery, then switch/button row, then ESP, then MPU.
 // Each pocket's Y footprint is bounded by its wider (PCBA) clearance slot.
@@ -111,6 +120,8 @@ switch_y_center = row_y_center + 1;
 button_y_center = switch_y_center + switch_width / 2 + 1.5 + button_width / 2;
 switch_z_center = size - split_h - switch_length / 2;
 button_z_center = size - split_h - button_length / 2;
+button_flexure_root_z = button_z_center - button_flexure_length;
+button_flexure_slot_top_z = size - split_h + 0.5; // extend cutters past the base seam [mm]
 
 // Switch slot extends upward to the cover seam, keeping its original lower edge.
 // The slot bottom sits at (switch_z_center - switch_access_length/2).
@@ -177,6 +188,28 @@ module side_stadium_slot(x, y, z, length, width, depth) {
             stadium_slot(length, width, depth);
 }
 
+// Two through-slots isolate a flat side-wall tongue. They run from its
+// lower root to the cover seam; the outer face stays flush with the case.
+module button_flexure_slots() {
+    x = size - button_side_wall_thickness;
+    cut_depth = button_side_wall_thickness + eps2;
+    rail_offset = button_flexure_track_spacing / 2;
+    root_z = button_flexure_root_z;
+    slot_top_z = button_flexure_slot_top_z;
+    slot_length = slot_top_z - root_z;
+    slot_center_z = (root_z + slot_top_z) / 2;
+
+    for (side = [-1, 1])
+        side_stadium_slot(
+            x,
+            button_y_center + side * rail_offset,
+            slot_center_z,
+            slot_length,
+            button_flexure_slot_width,
+            cut_depth
+        );
+}
+
 module rounded_cube(s, r) {
     hull() {
         for (x = [r, s - r])
@@ -232,9 +265,22 @@ module base() {
         // pocket edge to preserve its holder; length follows the board spacing.
         translate([size / 2, cable_channel_y_start, size - split_h - wire_depth])
             cube([esp_width / 2, cable_channel_relief_length, wire_depth + eps]);
-        // Side openings for the switch slider and tactile-button actuator
+        // Keep the switch's original direct side opening. The tactile button
+        // now uses a flexible printed tongue instead of a hole through the wall.
         side_stadium_slot(size - switch_side_wall_thickness, switch_y_center, switch_access_cut_z_center, switch_access_cut_length, switch_access_width, switch_side_wall_thickness + eps2);
-        side_stadium_slot(size - button_side_wall_thickness, button_y_center, button_z_center, button_actuator_length, button_actuator_width, button_side_wall_thickness + eps2);
+        button_flexure_slots();
+        // Pocket behind the tongue, up to the cover seam, lets it deflect inward;
+        // at the button this joins the existing top-loaded body pocket.
+        translate([
+            size - button_side_wall_thickness - button_flexure_clearance_depth,
+            button_y_center - (button_flexure_track_spacing / 2 + button_flexure_clearance_side),
+            button_flexure_root_z
+        ])
+            cube([
+                button_flexure_clearance_depth + eps,
+                button_flexure_track_spacing + 2 * button_flexure_clearance_side,
+                button_flexure_slot_top_z - button_flexure_root_z
+            ]);
         // Top-loaded, side-oriented switch body and inward terminal clearance
         translate([switch_body_x_min, switch_y_center - (switch_width + switch_fit_clearance) / 2, size - split_h - switch_length])
             cube([switch_body_depth + switch_fit_clearance, switch_width + switch_fit_clearance, switch_length + eps]);
