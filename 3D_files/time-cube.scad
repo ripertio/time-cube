@@ -49,7 +49,7 @@ switch_pin_height = 5;         // terminal clearance depth inward from the body 
 switch_pin_channel_width = 1.8; // terminal wire channel width, along Y [mm]
 switch_access_length = 7;      // side slot length, along Z [mm]
 switch_access_width = 2.5;     // actuator channel width, along Y [mm]
-switch_side_wall_thickness = 1.2; // remaining outer wall thickness at the switch [mm]
+switch_side_wall_thickness = 1.4; // remaining outer wall thickness at the switch [mm]
 button_side_wall_thickness = 0.8; // flexure tongue thickness at the outer wall [mm]
 
 // 3x6x4.5mm tactile button, laid on its side and top-loaded. The 4.5mm
@@ -57,7 +57,7 @@ button_side_wall_thickness = 0.8; // flexure tongue thickness at the outer wall 
 // cantilever in that wall presses the tactile actuator from outside.
 button_length = 6;              // body length, along Z when side-mounted [mm]
 button_width = 3.5;             // body width, along Y [mm]
-button_side_depth = 3.9;        // overall depth including actuator, along X [mm]
+button_side_depth = 4.05;        // overall depth including actuator, along X [mm]
 button_actuator_length = 3.2;   // actuator length, along Z [mm]
 button_actuator_width = 1.8;    // actuator width, along Y [mm]
 button_fit_clearance = 0.4;     // total clearance around the button body [mm]
@@ -68,7 +68,7 @@ button_pin_offset_z = 3.25;     // terminal pitch is 6.5mm, along Z when side-mo
 // Flat side-wall flexure. Parallel through-slots isolate a flush tongue that
 // bends inward when pressed, with a relief pocket behind it for travel.
 button_flexure_length = 8;           // cantilever length from press zone to root [mm]
-button_flexure_slot_width = 0.5;      // width of the through-slots around the tongue [mm]
+button_flexure_slot_width = 0.4;      // width of the through-slots around the tongue [mm]
 button_flexure_track_spacing = 4.0;   // distance between slot centerlines [mm]
 button_flexure_clearance_depth = 0.8; // inward space behind tongue for flex [mm]
 button_flexure_clearance_side = 0.4;  // extra width of the relief behind the tongue [mm]
