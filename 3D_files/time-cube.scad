@@ -57,8 +57,8 @@ switch_fit_clearance = 0.4;    // total clearance around the switch body [mm]
 switch_pin_height = 5;         // terminal clearance depth inward from the body [mm]
 switch_pin_channel_width = 1.8; // terminal wire channel width, along Y [mm]
 switch_access_length = 7;      // side slot length, along Z [mm]
-switch_access_width = 1.8;     // actuator channel width, along Y [mm]
-switch_side_wall_thickness = 2; // remaining outer wall thickness at the switch [mm]
+switch_access_width = 2.5;     // actuator channel width, along Y [mm]
+switch_side_wall_thickness = 1.2; // remaining outer wall thickness at the switch [mm]
 button_side_wall_thickness = 0.6; // remaining outer wall thickness at the button [mm]
 
 // 3x6x4.5mm tactile button, laid on its side and top-loaded. The 4.5mm
