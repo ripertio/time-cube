@@ -7,23 +7,23 @@
 - [x] Wire up components 
     - [x] ESP32-S3
     - [x] MPU-6050, 
-    - [ ] battery
-    - [ ] on/off switch
-    - [ ] reset button
+    - [x] battery
+    - [x] on/off switch
+    - [x] reset button
 
 ### 3D Design & Printing
 - [x] Create initial sketch / concept drawing
 - [x] Ask for help with CAD design
-- [ ] Finalize CAD model
+- [x] Draft CAD model
   - Cube body: ~50×50×50 mm outer dimensions
   - Wall thickness: 1.5–2 mm for semi-transparency
   - Internal standoffs / snap-fits to hold PCB and battery in place
   - Cutouts: USB-C port, sliding power switch, diffuser window for LED
   - Lid or bottom panel that clips or screws shut for easy access
-- [ ] Buy transparent / translucent PLA (natural or white for LED glow)
-- [ ] Slice and print prototype
-  - Infill: 10–15% (gyroid) to keep walls thin and light diffusion even
-- [ ] Test fit: verify all components fit, check LED glow through walls
+- [x] Buy transparent / translucent PLA (natural or white for LED glow)
+- [x] Slice and print prototype
+  - Infill: 12-15% (gyroid) to keep walls thin and light diffusion even
+- [x] Test fit: verify all components fit, check LED glow through walls
 - [ ] Iterate: refine tolerances, adjust wall thickness if needed
 
 ---

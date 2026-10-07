@@ -10,9 +10,6 @@ A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orienta
 - **LED status feedback** — onboard WS2812B RGB LED indicates connection and tracking state
 - **Battery powered** — LiPo with TP4056 charging circuit
 
-## Current State
-
-
 ---
 
 ## Hardware
