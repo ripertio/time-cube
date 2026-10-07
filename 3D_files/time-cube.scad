@@ -11,15 +11,6 @@ gap = 90;            // visual separation between base and cover when previewing
 eps = 0.01;          // small overlap/clearance to avoid floating-point precision issues
 eps2 = 0.02;         // double epsilon for larger relief cuts
 
-/*
-corner_margin = 8;   // distance of screw centers from each side edge [mm]
-insert_d = 3.5;      // heat-set insert hole diameter (base) [mm]
-insert_depth = 3;    // heat-set insert hole depth (base) [mm]
-screw_clear_d = 2.2; // M2 clearance hole diameter (cover) [mm]
-screw_head_d = 8;    // flat screw head diameter, for counterbore (cover) [mm]
-screw_head_depth = 0.8;
-*/
-
 inner_cavity_depth = 28; // height of the upper internal cavity where the parts sit [mm]
 inner_cavity_wall = 2;   // wall thickness around the internal cavity [mm]
 
@@ -155,16 +146,6 @@ corridor_y_end = spur_battery_x_start + 0.5;
 
 $fn = 64;
 
-/*
-// corner screw positions, inset from the cube's side faces
-corner_positions = [
-    [corner_margin, corner_margin],
-    [size - corner_margin, corner_margin],
-    [corner_margin, size - corner_margin],
-    [size - corner_margin, size - corner_margin],
-];
-*/
-
 snap_positions = [
     [snap_tab_inset, snap_tab_inset],
     [size - snap_tab_inset - snap_tab_width, snap_tab_inset],
@@ -229,12 +210,6 @@ module base() {
             translate([-1, -1, -1])
                 cube([size + 2, size + 2, size - split_h + 1]);
         }
-        /*
-        // blind holes for heat-set inserts, drilled down from the mating face
-        for (p = corner_positions)
-            translate([p[0], p[1], size - split_h - insert_depth + eps])
-                cylinder(d = insert_d, h = insert_depth, $fn = 32);
-        */
         // matching recesses for the lid snap tabs
         for (p = snap_positions)
             translate([p[0] - snap_recess_extra / 2, p[1] - snap_recess_extra / 2, size - split_h - snap_tab_height - 0.2])
@@ -315,15 +290,6 @@ module cover() {
                 translate([-1, -1, size - split_h])
                     cube([size + 2, size + 2, split_h + 1]);
             }
-            /*
-            // through holes for M2 screws, counterbored for 8mm-diameter flat heads
-            for (p = corner_positions) {
-                translate([p[0], p[1], size - split_h - 1])
-                    cylinder(d = screw_clear_d, h = split_h + 2, $fn = 32);
-                translate([p[0], p[1], size - screw_head_depth + eps])
-                    cylinder(d = screw_head_d, h = screw_head_depth + 1, $fn = 32);
-            }
-            */
             // USB-C charging slot, straight through the cover, above the ESP's socket
             translate([usbc_x_center, usbc_y_center, size - split_h / 2])
                 stadium_slot(usbc_slot_length, usbc_slot_width, split_h + 2);
