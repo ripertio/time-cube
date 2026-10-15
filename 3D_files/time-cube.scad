@@ -34,13 +34,13 @@ mpu_register_height = 2;  // height (Z) of the bottom registration shelf that gr
 esp_length = 23.7;         // ESP32-S3-mini board height, stands vertically along Z [mm]
 esp_width = 18.5;          // ESP32-S3-mini board width, along X [mm]
 esp_pcb_height = 1.4;      // bare PCB thickness -> width (Y) of the bottom registration shelf [mm]
-esp_pcba_height = 4;       // populated PCBA thickness -> width (Y) of the main clearance slot [mm]
+esp_pcba_height = 5.5;       // populated PCBA thickness -> width (Y) of the main clearance slot [mm]
 esp_register_height = 1;   // height (Z) of the bottom registration shelf that grips the bare board edge [mm]
 esp_gap_from_mpu = 20;     // gap between the MPU pocket and the ESP pocket, along Y [mm]
 
 // The side switch remains in the X=size wall. The extra tactile switch is now
 // mounted actuator-up beneath a flexure in the snap-fit cover.
-switch_length = 9;             // switch body length, along Z when side-mounted [mm]
+switch_length = 8.7;             // switch body length, along Z when side-mounted [mm]
 switch_width = 4;              // switch body width, along Y [mm]
 switch_body_depth = 4;       // switch body depth, along X [mm]
 switch_fit_clearance = 0.4;    // total clearance around the switch body [mm]
@@ -51,17 +51,16 @@ switch_access_width = 2.5;     // actuator channel width, along Y [mm]
 switch_side_wall_thickness = 1.2; // remaining outer wall thickness at the switch [mm]
 
 // 3x6x4.5mm tactile button, rotated actuator-up beneath the cover tongue.
-// In the new orientation its 6mm body dimension and 6.5mm terminal pitch run
-// along X. The two pin wells connect through a shallow passage below the body.
-button_length = 6;              // switch body length along X [mm]
-button_width = 3.5;             // switch body width along Y [mm]
+// In this orientation its 6mm body dimension and terminal pitch run along Y.
+// The two pin wells connect to the existing side wire corridor.
+button_length = 3.5;              // switch body length along X [mm]
+button_width = 6;             // switch body width along Y [mm]
 button_side_depth = 3.9;        // body/actuator stack height along Z [mm]
-button_actuator_length = 3.2;   // actuator dimension retained from the switch spec [mm]
 button_actuator_width = 1.8;    // actuator width [mm]
 button_fit_clearance = 0.4;     // total clearance around the switch body [mm]
 button_pin_size = 1.6;          // terminal clearance square, along X and Y [mm]
 button_pin_depth = 6.0;         // pin clearance down to the wire trench [mm]
-button_pin_offset_x = 3.25;     // 6.5mm terminal pitch, centered along X [mm]
+button_pin_offset_y = 3.5;     // half the terminal spacing, centered along Y [mm]
 
 // Flush top-cover flexure. A U-shaped through-slot isolates the tongue; an
 // underside relief leaves a thin top skin and room for the switch body.
@@ -106,7 +105,7 @@ usbc_y_center = esp_y_center + esp_pcba_height / 2 - usbc_slot_width / 2 - 0.5; 
 
 // Controls are side by side along Y on the X=size wall, away from the ESP pocket.
 switch_y_center = row_y_center + 1;
-button_gap_switch = 7b;
+button_gap_switch = 7;
 button_y_center = switch_y_center + switch_width / 2 + button_gap_switch + button_width / 2;
 switch_z_center = size - split_h - switch_length / 2;
 button_top_x_center = 43;       // same side location as before, just inside the +X rim [mm]
@@ -118,9 +117,7 @@ button_flexure_tip_x = button_flexure_root_x + button_flexure_length;
 button_flexure_slot_z = size - split_h / 2;
 button_flexure_relief_x = button_flexure_root_x + 1.2;
 button_flexure_relief_width = button_flexure_tip_x + 0.2 - button_flexure_relief_x;
-button_wire_spur_height = 2.2;  // shallow pin-wire route below the switch floor [mm]
-button_wire_channel_width = 2.4; // passage width under the switch, joining both pin wells [mm]
-button_pin_open_channel_width = 2.4; // open lead groove width along X, routed toward +Y [mm]
+button_wire_channel_width = 1; // width of each open-top pin-to-corridor route [mm]
 
 // Switch slot extends upward to the cover seam, keeping its original lower edge.
 // The slot bottom sits at (switch_z_center - switch_access_length/2).
@@ -147,8 +144,9 @@ switch_body_x_min = size - switch_side_wall_thickness - switch_body_depth - swit
 switch_terminal_x_min = switch_body_x_min - switch_pin_height - 0.25;
 button_body_x_min = button_top_x_center - (button_length + button_fit_clearance) / 2;
 button_body_y_min = button_top_y_center - (button_width + button_fit_clearance) / 2;
-button_terminal_x1 = button_top_x_center - button_pin_offset_x;
-button_terminal_x2 = button_top_x_center + button_pin_offset_x;
+button_terminal_y1 = button_top_y_center - button_pin_offset_y;
+button_terminal_y2 = button_top_y_center + button_pin_offset_y;
+button_wire_x_end = button_top_x_center + (button_length + button_fit_clearance) / 2;
 control_wire_y = cable_channel_y_start + cable_channel_length / 2;
 
 // Prolong the battery's Y-bar corridor past the battery spur so the two connect.
@@ -218,32 +216,30 @@ module button_flexure_relief() {
             split_h - button_flexure_skin_thickness + eps2
         ]);
 }
-
 module button_terminal_channels() {
-    for (px = [button_terminal_x1, button_terminal_x2]) {
-        // Vertical pin well. The +Y groove below opens this well sideways so
-        // a pre-wired lead can lie in the pocket while the switch drops in.
+    for (py = [button_terminal_y1, button_terminal_y2])
         translate([
-            px - button_pin_size / 2,
-            button_top_y_center - button_pin_size / 2,
+            button_top_x_center - button_pin_size / 2,
+            py - button_pin_size / 2,
             button_body_bottom_z - button_pin_depth
         ])
             cube([button_pin_size, button_pin_size, button_pin_depth + eps]);
+}
 
-        // Open-ended channel from each terminal toward the +Y edge of the
-        // button pocket. It is cut up to the pocket floor, so the wired switch
-        // can be loaded from above without threading leads through closed holes.
+// Two separate top-open routes connect the Y-spaced pins to the existing
+// side wire corridor. Each cut runs from the mating face down to wire_depth.
+module button_pin_wire_channels() {
+    for (py = [button_terminal_y1, button_terminal_y2])
         translate([
-            px - button_pin_open_channel_width / 2,
-            button_top_y_center - button_pin_size / 2,
-            button_body_bottom_z - button_pin_depth
+            corridor_x_min,
+            py - button_wire_channel_width / 2,
+            size - split_h - wire_depth
         ])
             cube([
-                button_pin_open_channel_width,
-                button_body_y_min + button_width + button_fit_clearance - button_top_y_center + button_pin_size / 2 + eps,
-                button_pin_depth + eps
+                button_wire_x_end - corridor_x_min,
+                button_wire_channel_width,
+                wire_depth + eps
             ]);
-    }
 }
 
 module rounded_cube(s, r) {
@@ -319,22 +315,9 @@ module base() {
         // wiring: spur connecting the corridor to the cable_channel (battery's cables)
         translate([spur_battery_x_start, spur_battery_y_center - spur_battery_width / 2, size - split_h - wire_depth])
             cube([corridor_x_min - spur_battery_x_start, spur_battery_width, wire_depth + eps]);
-        // Shallow passage under the tactile switch links its outer pin, inner
-        // pin and the existing corridor. The 2.2mm-high passage leaves a solid
-        // roof under the switch pocket.
-        // Open wiring route from the corridor to both button pins.
-        // Open wiring route from the corridor to both button pins.
-        translate([
-            corridor_x_min,
-            button_top_y_center - button_wire_channel_width / 2,
-            size - split_h - wire_depth
-        ])
-            cube([
-                button_terminal_x2 + button_pin_size / 2 - corridor_x_min,
-                button_wire_channel_width,
-                wire_depth + eps
-            ]);
-        // Vertical terminal wells meet the shallow wire spur below the switch.
+        // Separate open-top routes connect each Y-spaced button pin directly
+        // to the existing wire corridor, so attached leads can be loaded from above.
+        button_pin_wire_channels();
         button_terminal_channels();
     }
 }
@@ -369,6 +352,5 @@ module cover() {
 // on the build plate; its underside flexure relief opens upward during printing.
 base();
 
-translate([size + 5, 0, size])
-    mirror([0, 0, 1])
+translate([0, 0, size])
         cover();
