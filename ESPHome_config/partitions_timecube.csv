@@ -1,0 +1,6 @@
+# Timecube custom partition table (4MB flash, no OTA - firmware updates via USB cable only)
+# app0 sized for ~969KB compiled firmware + ~33% headroom for future growth
+# Name,   Type, SubType, Offset,   Size,    Flags
+nvs,      data, nvs,     0x9000,   0x5000
+app0,     app,  factory, 0x10000,  0x140000
+tclog,    data, 0x99,    0x150000, 0x2B0000

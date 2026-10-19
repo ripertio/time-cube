@@ -81,9 +81,6 @@ api:
             clear_log();
             id(csv_export).update();
             id(log_count).update();
-# Enable OTA updates
-ota:
-
 # Web Server for Dashboard + WiFi Management
 web_server:
   port: 80
@@ -94,6 +91,10 @@ time:
   - platform: sntp
     id: sntp_time
     timezone: Europe/Berlin
+    on_time_sync:
+      then:
+        - lambda: |-
+            recover_checkpoint();
 
 # I2C Bus for MPU-6050
 i2c:
@@ -360,7 +361,12 @@ globals:
     type: unsigned long
     restore_value: no
     initial_value: '0'
-  
+
+  - id: activity_start_epoch
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
   - id: is_debouncing
     type: bool
     restore_value: no
@@ -437,6 +443,8 @@ script:
             id(last_side) = current;
             id(green_flash_until) = millis() + 5000;
             id(activity_start) = millis();
+            auto now = id(sntp_time).now();
+            id(activity_start_epoch) = now.is_valid() ? (unsigned long)now.timestamp : 0;
             id(current_activity).update();
             
             ESP_LOGI("timecube", "Side confirmed: %d (%s)", current, id(current_activity).state.c_str());
@@ -506,6 +514,13 @@ script:
       - lambda: |-
           ESP_LOGI("timecube", "25-min Reminder!");
 
+  - id: save_checkpoint_tick
+    then:
+      - lambda: |-
+          if (id(last_side) >= 1 && id(last_side) <= 6) {
+            save_checkpoint(id(last_side), id(activity_start_epoch));
+          }
+
 # Intervals
 interval:
   - interval: 100ms
@@ -519,3 +534,7 @@ interval:
   - interval: 25min
     then:
       - script.execute: reminder_25min
+
+  - interval: 60s
+    then:
+      - script.execute: save_checkpoint_tick
