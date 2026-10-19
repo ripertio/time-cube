@@ -23,27 +23,12 @@
     .container { max-width: 1100px; margin: 0 auto; }
 
     /* --- Header --- */
-    header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
     header h1 { flex: 1; min-width: 200px; }
-    .badge {
-      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 99px;
-      background: #1e1e24; color: #888;
-    }
-
-    /* --- URL bar --- */
-    .url-bar {
-      display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;
-    }
-    .url-bar input {
-      flex: 1; min-width: 260px;
-      background: #1a1a20; border: 1px solid #333; border-radius: 8px;
-      color: #e0e0e0; padding: 0.55rem 0.9rem; font-size: 0.9rem; outline: none;
-      transition: border-color 0.2s;
-    }
-    .url-bar input:focus { border-color: #6c63ff; }
     .btn {
       padding: 0.55rem 1.1rem; border-radius: 8px; border: none;
       font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+      text-decoration: none; display: inline-block;
     }
     .btn:hover { opacity: 0.85; }
     .btn-primary { background: #6c63ff; color: #fff; }
@@ -108,24 +93,12 @@
 
   <header>
     <h1>⏱ Time Cube Analytics</h1>
+    <button class="btn btn-primary" onclick="loadData()">↻ Refresh</button>
+    <button class="btn btn-ghost" id="btn-download" style="display:none" onclick="downloadCSV()">⬇ Download CSV</button>
+    <a class="btn btn-ghost" href="/">⚙ Configure</a>
   </header>
 
-  <!-- URL Input -->
-  <div class="url-bar">
-    <input type="text" id="csv-url" value="http://timecube.local/text_sensor/CSV%20Export" autocomplete="off" />
-    <button class="btn btn-primary" onclick="loadData(true)">Load</button>
-    <button class="btn btn-ghost" onclick="togglePaste()">Paste JSON</button>
-    <button class="btn btn-ghost" id="btn-download" style="display:none" onclick="downloadCSV()">⬇ Download CSV</button>
-    <button class="btn btn-ghost" onclick="clearCache()">Clear Cache</button>
-  </div>
-  <div id="paste-area" style="display:none; margin-bottom:0.75rem;">
-    <textarea id="paste-json" rows="4"
-      placeholder='Paste the full JSON response here, e.g. {"value":"2026-07-11T...\n..."}'
-      style="width:100%; background:#1a1a20; border:1px solid #333; border-radius:8px; color:#e0e0e0;
-             padding:0.7rem 0.9rem; font-size:0.85rem; font-family:monospace; resize:vertical; outline:none;"></textarea>
-    <button class="btn btn-primary" style="margin-top:0.4rem;" onclick="loadFromPaste()">Parse</button>
-  </div>
-  <div class="meta" id="meta-line"></div>
+  <div class="meta" id="meta-line">Loading…</div>
   <div class="error-box" id="error-box"></div>
 
   <!-- Main content (hidden until data loaded) -->
@@ -171,9 +144,9 @@
 
 <script>
 // ─── Constants ────────────────────────────────────────────────────────────────
-const CACHE_URL   = 'timecube_url';
-const CACHE_DATA  = 'timecube_csv';
-const CACHE_TIME  = 'timecube_fetched_at';
+// Served from the same host/port as the API (ESPHome's web_server), so this is
+// a same-origin request - a relative path works regardless of hostname/IP used.
+const CSV_URL = '/text_sensor/csv_export';
 
 const PALETTE = [
   '#6c63ff','#ff6584','#43d9ad','#f7b731','#a55eea',
@@ -215,7 +188,7 @@ function parseCSV(text) {
     const parts = line.split(',');
     if (parts.length < 4) return null;
     const ts = new Date(parts[0].trim());
-    if (isNaN(ts)) return null;
+    if (isNaN(ts)) return null; // also drops "unsynced" rows logged before the clock had NTP time
     return {
       timestamp: ts,
       seite: parseInt(parts[1].trim()),
@@ -383,11 +356,11 @@ function showError(msg) {
   el.textContent = msg || '';
 }
 
-function showMeta(fetchedAt, count, cached) {
+function showMeta(fetchedAt, count) {
   const ago = Math.round((Date.now() - fetchedAt) / 1000 / 60);
   const agoStr = ago < 1 ? 'just now' : ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
   document.getElementById('meta-line').innerHTML =
-    `<span>${count} entries</span> &nbsp;·&nbsp; Last fetched: <span>${agoStr}</span>${cached ? ' &nbsp;·&nbsp; <span>from cache</span>' : ''}`;
+    `<span>${count} entries</span> &nbsp;·&nbsp; Last fetched: <span>${agoStr}</span>`;
 }
 
 async function fetchAndParse(url) {
@@ -405,53 +378,20 @@ async function fetchAndParse(url) {
   return parseCSV(csvText);
 }
 
-async function loadData(forceRefresh = false) {
-  const urlInput = document.getElementById('csv-url').value.trim();
-  const url = urlInput || localStorage.getItem(CACHE_URL);
-
-  if (!url) { showError('Please enter a CSV URL.'); return; }
+async function loadData() {
   showError('');
-  document.getElementById('csv-url').value = url;
-
-  let rows, fetchedAt, fromCache = false;
-
-  const cachedUrl  = localStorage.getItem(CACHE_URL);
-  const cachedData = localStorage.getItem(CACHE_DATA);
-  const cachedTime = localStorage.getItem(CACHE_TIME);
-
-  if (!forceRefresh && cachedData && cachedUrl === url) {
-    rows = JSON.parse(cachedData).map(r => ({ ...r, timestamp: new Date(r.timestamp) }));
-    fetchedAt = parseInt(cachedTime);
-    fromCache = true;
-  } else {
-    try {
-      rows = await fetchAndParse(url);
-      fetchedAt = Date.now();
-      localStorage.setItem(CACHE_URL, url);
-      localStorage.setItem(CACHE_DATA, JSON.stringify(rows));
-      localStorage.setItem(CACHE_TIME, fetchedAt);
-    } catch (e) {
-      // If fetch fails, fall back to cache
-      if (cachedData && cachedUrl === url) {
-        rows = JSON.parse(cachedData).map(r => ({ ...r, timestamp: new Date(r.timestamp) }));
-        fetchedAt = parseInt(cachedTime);
-        fromCache = true;
-        showError(`Could not refresh (${e.message}). Showing cached data.`);
-        document.getElementById('error-box').style.color = '#f7b731';
-      } else {
-        showError(`Failed to load: ${e.message}`);
-        return;
-      }
-    }
+  try {
+    const rows = await fetchAndParse(CSV_URL);
+    if (!rows.length) { showError('No data yet — flip the cube to log your first activity.'); return; }
+    processRows(rows, Date.now());
+  } catch (e) {
+    showError(`Failed to load from the cube: ${e.message}`);
   }
-
-  if (!rows.length) { showError('No valid data found in CSV.'); return; }
-  processRows(rows, fetchedAt, fromCache);
 }
 
-function processRows(rows, fetchedAt, fromCache) {
+function processRows(rows, fetchedAt) {
   allRows = rows;
-  showMeta(fetchedAt, rows.length, fromCache);
+  showMeta(fetchedAt, rows.length);
 
   const months = Object.keys(byMonth(rows)).sort();
   renderMonthTabs(months);
@@ -460,28 +400,6 @@ function processRows(rows, fetchedAt, fromCache) {
 
   document.getElementById('main-content').style.display = 'block';
   document.getElementById('btn-download').style.display = '';
-}
-
-function togglePaste() {
-  const el = document.getElementById('paste-area');
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
-}
-
-function loadFromPaste() {
-  const raw = document.getElementById('paste-json').value.trim();
-  if (!raw) { showError('Nothing pasted.'); return; }
-  showError('');
-  let csvText;
-  try {
-    const json = JSON.parse(raw);
-    csvText = (json.value ?? json.state ?? '').replace(/\\n/g, '\n');
-  } catch {
-    csvText = raw; // treat as raw CSV
-  }
-  const rows = parseCSV(csvText);
-  if (!rows.length) { showError('No valid data found.'); return; }
-  processRows(rows, Date.now(), false);
-  document.getElementById('paste-area').style.display = 'none';
 }
 
 function downloadCSV() {
@@ -501,30 +419,8 @@ function downloadCSV() {
   URL.revokeObjectURL(a.href);
 }
 
-function clearCache() {
-  localStorage.removeItem(CACHE_URL);
-  localStorage.removeItem(CACHE_DATA);
-  localStorage.removeItem(CACHE_TIME);
-  document.getElementById('main-content').style.display = 'none';
-  document.getElementById('btn-download').style.display = 'none';
-  document.getElementById('meta-line').textContent = 'Cache cleared.';
-  document.getElementById('csv-url').value = '';
-  showError('');
-}
-
 // ─── Init ─────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  const savedUrl = localStorage.getItem(CACHE_URL);
-  if (savedUrl) {
-    document.getElementById('csv-url').value = savedUrl;
-    loadData(); // load from cache automatically
-  }
-
-  // Allow Enter key in URL input
-  document.getElementById('csv-url').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadData(true);
-  });
-});
+window.addEventListener('DOMContentLoaded', loadData);
 </script>
 </body>
 </html>

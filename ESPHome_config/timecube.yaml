@@ -4,7 +4,8 @@ esphome:
   
   includes:
     - timecube_storage.h
-  
+    - timecube_dashboard.h
+
   on_boot:
    - priority: -100
      then:
@@ -12,6 +13,7 @@ esphome:
           ESP_LOGI("timecube", "Time Cube gestartet!");
           setup_littlefs();
           load_config();
+          register_dashboard_handler();
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -82,9 +84,14 @@ api:
             id(csv_export).update();
             id(log_count).update();
 # Web Server for Dashboard + WiFi Management
+web_server_base:
+  id: base_web_server
+
 web_server:
+  web_server_base_id: base_web_server
   port: 80
   version: 3
+  local: true
 
 # Time Component (NTP)
 time:

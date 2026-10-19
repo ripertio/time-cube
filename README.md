@@ -43,6 +43,23 @@ The firmware is built with [ESPHome](https://esphome.io/). The configuration fil
 
 To flash or inspect logs, use the ESPHome web installer: [web.esphome.io](https://web.esphome.io/?dashboard_install)
 
+Or use local esphome CLI:
+````
+# one-time install, in a throwaway virtualenv to keep things clean
+python3 -m venv ~/.venvs/esphome
+source ~/.venvs/esphome/bin/activate
+pip install esphome
+
+# fast sanity check — compiles only, no device needed
+esphome compile ESPHome_config/timecube.yaml
+
+# compile + flash over USB (prompts you to pick the serial port)
+esphome run ESPHome_config/timecube.yaml
+
+# after flashing, tail the device's logs
+esphome logs ESPHome_config/timecube.yaml
+```
+
 ### LED States
 
 | State                  | Color  | Pattern    |
