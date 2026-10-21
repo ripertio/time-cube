@@ -14,6 +14,8 @@ esphome:
           setup_littlefs();
           load_config();
           register_dashboard_handler();
+          id(wifi_user_enabled) = true;
+       - wifi.enable:
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -253,6 +255,73 @@ binary_sensor:
   - platform: status
     name: "Status"
 
+  # Taster gegen GND: Klick beendet laufende Pause, 3s halten schaltet WLAN um
+  - platform: gpio
+    pin:
+      number: GPIO4
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "Taster"
+    id: main_button
+    filters:
+      - delayed_on_off: 20ms
+    # Halten (>= 3s) schaltet WLAN um
+    on_click:
+      - min_length: 3000ms
+        max_length: 60s
+        then:
+          - logger.log:
+              level: INFO
+              format: "Taster: Halten erkannt, WLAN umschalten"
+          - lambda: 'id(wifi_user_enabled) = !id(wifi_user_enabled);'
+          - if:
+              condition:
+                lambda: 'return id(wifi_user_enabled);'
+              then:
+                - wifi.enable:
+              else:
+                - wifi.disable:
+
+    # Einfacher Klick beendet laufende Pause, Doppelklick startet Pause
+    on_multi_click:
+      - timing:
+          - ON for at most 2900ms
+          - OFF for at least 400ms
+        then:
+          - lambda: |-
+              if (id(pomodoro_phase) == 2) {
+                log_break((millis() - id(pomodoro_phase_start)) / 1000);
+                id(csv_export).update();
+                id(log_count).update();
+                id(pomodoro_phase) = 0;
+                ESP_LOGI("timecube", "Pause per Taster beendet");
+              }
+      - timing:
+          - ON for at most 2900ms
+          - OFF for at most 300ms
+          - ON for at most 2900ms
+          - OFF for at least 400ms
+        then:
+          - logger.log:
+              level: INFO
+              format: "Taster: Doppelklick erkannt"
+          - lambda: |-
+              if (!id(pomodoro_enabled).state) return;
+              if (id(pomodoro_phase) != 2) {
+                id(pomodoro_phase) = 2;
+                id(pomodoro_phase_start) = millis();
+                id(pomodoro_last_blink_elapsed) = 0;
+                id(pomodoro_last_white_elapsed) = 0;
+                ESP_LOGI("timecube", "Pause per Doppelklick gestartet");
+              }
+          - script.execute:
+              id: pomodoro_blink
+              red: 0.3
+              green: 0.3
+              blue: 0.3
+
 # Button to Reset WiFi
 button:
   - platform: restart
@@ -361,10 +430,10 @@ switch:
 # Pomodoro Timer Einstellungen (persistiert ueber Reboot)
 number:
   - platform: template
-    name: "Pomodoro Minuten"
+    name: "Pomodoro Minuten (Min 1, Max 120)"
     id: pomodoro_minutes
     min_value: 1
-    max_value: 90
+    max_value: 120
     step: 1
     mode: box
     optimistic: true
@@ -372,7 +441,7 @@ number:
     initial_value: 25
 
   - platform: template
-    name: "Pause Minuten"
+    name: "Pause Minuten (Min 1, Max 60)"
     id: break_minutes
     min_value: 1
     max_value: 60
@@ -381,6 +450,19 @@ number:
     optimistic: true
     restore_value: true
     initial_value: 5
+
+  # Helligkeit der blauen WLAN-Anzeige
+  - platform: template
+    name: "WLAN LED Helligkeit"
+    id: wifi_led_brightness
+    min_value: 1
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    optimistic: true
+    restore_value: true
+    initial_value: 20
 
 # Global Variables
 globals:
@@ -424,6 +506,11 @@ globals:
     restore_value: no
     initial_value: 'false'
 
+  - id: wifi_user_enabled
+    type: bool
+    restore_value: no
+    initial_value: 'true'
+
   - id: green_flash_until
     type: unsigned long
     restore_value: no
@@ -445,6 +532,11 @@ globals:
     initial_value: '0'
 
   - id: pomodoro_last_blink_elapsed
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+  - id: pomodoro_last_white_elapsed
     type: unsigned long
     restore_value: no
     initial_value: '0'
@@ -521,6 +613,12 @@ script:
           
           if (id(led_override_active)) return;  // Reminder-Blinken läuft, nicht stören
 
+          // WiFi per Taster abgeschaltet -> LED aus
+          if (!id(wifi_user_enabled)) {
+            id(status_led).turn_off().perform();
+            return;
+          }
+
           // WiFi nicht verbunden
           if (!id(wifi_connected)) {
             unsigned long period = id(wifi_ever_connected) ? 300 : 1000; // rot schnell / gelb langsam
@@ -555,8 +653,10 @@ script:
             return;
           }
 
-          // Bereit -> Aus
-          auto call = id(status_led).turn_off();
+          // Bereit, WiFi aktiv -> gedimmtes Blau
+          auto call = id(status_led).turn_on();
+          call.set_rgb(0.0f, 0.3f, 1.0f);
+          call.set_brightness(id(wifi_led_brightness).state / 100.0f);
           call.perform();
 
   # Kurzes Aufblitzen in gegebener Farbe, ohne die normale LED-Logik zu stoeren
@@ -598,6 +698,7 @@ script:
               id(pomodoro_phase) = 2;
               id(pomodoro_phase_start) = millis();
               id(pomodoro_last_blink_elapsed) = 0;
+              id(pomodoro_last_white_elapsed) = 0;
               ESP_LOGI("timecube", "Pomodoro: Arbeit fertig, Pause beginnt");
               return;
             }
@@ -612,13 +713,21 @@ script:
           // phase == 2: Pause
           unsigned long break_sec = (unsigned long)(id(break_minutes).state * 60);
           if (elapsed >= break_sec) {
+            log_break(break_sec);
+            id(csv_export).update();
+            id(log_count).update();
             id(pomodoro_phase) = 0;
             ESP_LOGI("timecube", "Pomodoro: Pause fertig");
+            id(pomodoro_blink).execute(0.3f, 0.3f, 0.3f);
             return;
           }
-          unsigned long remaining = break_sec - elapsed;
-          // Erste/letzte 30s: alle 5s rot blinken, dazwischen alle 30s
-          unsigned long blink_interval = (elapsed < 30 || remaining <= 30) ? 5 : 30;
+          // Alle 2 min kurzes weisses Aufblitzen: Wuerfel trackt die Pause
+          if (elapsed - id(pomodoro_last_white_elapsed) >= 120) {
+            id(pomodoro_last_white_elapsed) = elapsed;
+            id(pomodoro_blink).execute(0.3f, 0.3f, 0.3f);
+          }
+          // Erste 30s: alle 5s rot blinken, danach alle 30s
+          unsigned long blink_interval = (elapsed < 30) ? 5 : 30;
           if (elapsed - id(pomodoro_last_blink_elapsed) >= blink_interval) {
             id(pomodoro_last_blink_elapsed) = elapsed;
             id(pomodoro_blink).execute(1.0f, 0.0f, 0.0f);

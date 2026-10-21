@@ -15,9 +15,9 @@
 
 ## Remaining
 
-- [ ] 25-minute Pomodoro timer with LED indicator, ofter  25min - switch to break
+- [x] 25-minute Pomodoro timer with LED indicator, ofter  25min - switch to break
 - [ ] Verify power-loss recovery (test procedure in README.md, Status section)
-- [ ] Extra button: implement input handling and LED feedback
+- [x] Extra button: implement input handling and LED feedback
   - [ ] Hold: toggle WiFi on/off (LED indicates state)
   - [ ] Single press: skip / reactivate current side (LED indicates state)
   - [ ] Double press: break (LED indicates break)
