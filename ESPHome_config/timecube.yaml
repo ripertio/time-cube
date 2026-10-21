@@ -347,6 +347,41 @@ text:
         id(activity_side_6).update();
         id(current_activity).update();
 
+# Pomodoro Timer an/aus (persistiert ueber Reboot)
+switch:
+  - platform: template
+    name: "Pomodoro Aktiv"
+    id: pomodoro_enabled
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_off_action:
+      - lambda: |-
+          id(pomodoro_phase) = 0;
+
+# Pomodoro Timer Einstellungen (persistiert ueber Reboot)
+number:
+  - platform: template
+    name: "Pomodoro Minuten"
+    id: pomodoro_minutes
+    min_value: 1
+    max_value: 90
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 25
+
+  - platform: template
+    name: "Pause Minuten"
+    id: break_minutes
+    min_value: 1
+    max_value: 60
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 5
+
 # Global Variables
 globals:
   - id: last_side
@@ -398,7 +433,22 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-    
+
+  - id: pomodoro_phase
+    type: int
+    restore_value: no
+    initial_value: '0'  # 0=idle, 1=work, 2=break
+
+  - id: pomodoro_phase_start
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+  - id: pomodoro_last_blink_elapsed
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
 
 # Scripts
 script:
@@ -453,7 +503,14 @@ script:
             auto now = id(sntp_time).now();
             id(activity_start_epoch) = now.is_valid() ? (unsigned long)now.timestamp : 0;
             id(current_activity).update();
-            
+
+            // Jeder bestaetigte Flip startet einen frischen Pomodoro (Arbeitsphase), falls aktiviert
+            if (id(pomodoro_enabled).state) {
+              id(pomodoro_phase) = 1;
+              id(pomodoro_phase_start) = millis();
+              id(pomodoro_last_blink_elapsed) = 0;
+            }
+
             ESP_LOGI("timecube", "Side confirmed: %d (%s)", current, id(current_activity).state.c_str());
           }
   - id: update_led
@@ -502,24 +559,70 @@ script:
           auto call = id(status_led).turn_off();
           call.perform();
 
-  - id: reminder_25min
+  # Kurzes Aufblitzen in gegebener Farbe, ohne die normale LED-Logik zu stoeren
+  - id: pomodoro_blink
+    parameters:
+      red: float
+      green: float
+      blue: float
     then:
       - lambda: 'id(led_override_active) = true;'
-      - repeat:
-          count: 3
-          then:
-            - light.turn_on:
-                id: status_led
-                red: 0%
-                green: 0%
-                blue: 100%
-                brightness: 100%
-            - delay: 200ms
-            - light.turn_off: status_led
-            - delay: 200ms
+      - light.turn_on:
+          id: status_led
+          red: !lambda 'return red;'
+          green: !lambda 'return green;'
+          blue: !lambda 'return blue;'
+          brightness: 100%
+      - delay: 200ms
+      - light.turn_off: status_led
       - lambda: 'id(led_override_active) = false;'
+
+  # Pomodoro-Zustandsautomat: startet bei jedem bestaetigten Flip (siehe check_debounce),
+  # laeuft Arbeit -> Pause -> Stopp (kein Auto-Loop), alle 1s geprueft.
+  - id: check_pomodoro
+    then:
       - lambda: |-
-          ESP_LOGI("timecube", "25-min Reminder!");
+          if (!id(pomodoro_enabled).state) {
+            id(pomodoro_phase) = 0;
+            return;
+          }
+
+          int phase = id(pomodoro_phase);
+          if (phase == 0) return;
+
+          unsigned long elapsed = (millis() - id(pomodoro_phase_start)) / 1000;
+
+          if (phase == 1) {
+            unsigned long work_sec = (unsigned long)(id(pomodoro_minutes).state * 60);
+            if (elapsed >= work_sec) {
+              id(pomodoro_phase) = 2;
+              id(pomodoro_phase_start) = millis();
+              id(pomodoro_last_blink_elapsed) = 0;
+              ESP_LOGI("timecube", "Pomodoro: Arbeit fertig, Pause beginnt");
+              return;
+            }
+            // Alle 5 Minuten gelb blinken
+            if (elapsed - id(pomodoro_last_blink_elapsed) >= 300) {
+              id(pomodoro_last_blink_elapsed) = elapsed;
+              id(pomodoro_blink).execute(1.0f, 1.0f, 0.0f);
+            }
+            return;
+          }
+
+          // phase == 2: Pause
+          unsigned long break_sec = (unsigned long)(id(break_minutes).state * 60);
+          if (elapsed >= break_sec) {
+            id(pomodoro_phase) = 0;
+            ESP_LOGI("timecube", "Pomodoro: Pause fertig");
+            return;
+          }
+          unsigned long remaining = break_sec - elapsed;
+          // Erste/letzte 30s: alle 5s rot blinken, dazwischen alle 30s
+          unsigned long blink_interval = (elapsed < 30 || remaining <= 30) ? 5 : 30;
+          if (elapsed - id(pomodoro_last_blink_elapsed) >= blink_interval) {
+            id(pomodoro_last_blink_elapsed) = elapsed;
+            id(pomodoro_blink).execute(1.0f, 0.0f, 0.0f);
+          }
 
   - id: save_checkpoint_tick
     then:
@@ -538,9 +641,9 @@ interval:
     then:
       - script.execute: check_debounce
 
-  - interval: 25min
+  - interval: 1s
     then:
-      - script.execute: reminder_25min
+      - script.execute: check_pomodoro
 
   - interval: 60s
     then:
