@@ -145,7 +145,6 @@ void load_config() {
 }
 
 std::string get_activity_name(int side) {
-  if (side == 0) return "Pause";  // Seite 0 = Pomodoro-Pause
   return activity_names.count(side) ? activity_names[side] : "Unbekannt";
 }
 
@@ -189,19 +188,11 @@ static void tc_write_entry(int side, uint32_t datetime, uint32_t duration) {
   ESP_LOGI("timecube", "Logged [%u/%u]: Seite %d | %u s", slot + 1, max, side, duration);
 }
 
-// Seite 0 = Pomodoro-Pause (wird nur ueber log_break aufgerufen)
 void log_activity(int side, unsigned long duration) {
   if (side < 1 || side > 6 || duration == 0) return;
   auto t = id(sntp_time).now();
   uint32_t dt = t.is_valid() ? pack_datetime(t.year, t.month, t.day_of_month, t.hour, t.minute, t.second) : 0;
   tc_write_entry(side, dt, (uint32_t)duration);
-}
-
-void log_break(unsigned long duration) {
-  if (duration == 0) return;
-  auto t = id(sntp_time).now();
-  uint32_t dt = t.is_valid() ? pack_datetime(t.year, t.month, t.day_of_month, t.hour, t.minute, t.second) : 0;
-  tc_write_entry(0, dt, (uint32_t)duration);
 }
 
 // --- Checkpoint (minimiert Datenverlust bei Stromausfall/Schalter) ---
@@ -254,6 +245,9 @@ void recover_checkpoint() {
 
   if (ckpt.side >= 1 && ckpt.side <= 6 && ckpt.last_seen_epoch > ckpt.start_epoch) {
     uint32_t duration = ckpt.last_seen_epoch - ckpt.start_epoch;
+    // Zeitlimit gilt auch fuer wiederhergestellte Sitzungen (z.B. Akku ueber Nacht leer)
+    uint32_t max_sec = (uint32_t)(id(max_tracking_hours).state * 3600);
+    if (max_sec > 0 && duration > max_sec) duration = max_sec;
     if (duration > 0 && duration < 172800UL) {  // Sanity-Check: < 48h
       tc_write_entry(ckpt.side, ckpt.last_seen_datetime, duration);
       ESP_LOGW("timecube", "Wiederhergestellt nach Stromverlust: Seite %d, %u s", ckpt.side, duration);

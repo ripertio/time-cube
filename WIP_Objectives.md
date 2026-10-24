@@ -15,7 +15,8 @@
 
 ## Remaining
 
-- [x] 25-minute Pomodoro timer with LED indicator, ofter  25min - switch to break
+- [x] Tracking reminder: short orange blink every X min (configurable, 0 = off)
+- [x] Auto-stop fallback: tracking ends after max X hours on one side (configurable)
 - [ ] Verify power-loss recovery (test procedure in README.md, Status section)
 - [x] Extra button: implement input handling and LED feedback
   - [ ] Hold: toggle WiFi on/off (LED indicates state)

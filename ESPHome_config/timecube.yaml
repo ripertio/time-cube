@@ -255,7 +255,7 @@ binary_sensor:
   - platform: status
     name: "Status"
 
-  # Taster gegen GND: Klick beendet laufende Pause, 3s halten schaltet WLAN um
+  # Taster gegen GND: 3s halten schaltet WLAN um
   - platform: gpio
     pin:
       number: GPIO4
@@ -267,6 +267,11 @@ binary_sensor:
     id: main_button
     filters:
       - delayed_on_off: 20ms
+    on_state:
+      - logger.log:
+          level: INFO
+          format: "Taster Zustand: %s"
+          args: ['x ? "gedrueckt" : "losgelassen"']
     # Halten (>= 3s) schaltet WLAN um
     on_click:
       - min_length: 3000ms
@@ -283,44 +288,6 @@ binary_sensor:
                 - wifi.enable:
               else:
                 - wifi.disable:
-
-    # Einfacher Klick beendet laufende Pause, Doppelklick startet Pause
-    on_multi_click:
-      - timing:
-          - ON for at most 2900ms
-          - OFF for at least 400ms
-        then:
-          - lambda: |-
-              if (id(pomodoro_phase) == 2) {
-                log_break((millis() - id(pomodoro_phase_start)) / 1000);
-                id(csv_export).update();
-                id(log_count).update();
-                id(pomodoro_phase) = 0;
-                ESP_LOGI("timecube", "Pause per Taster beendet");
-              }
-      - timing:
-          - ON for at most 2900ms
-          - OFF for at most 300ms
-          - ON for at most 2900ms
-          - OFF for at least 400ms
-        then:
-          - logger.log:
-              level: INFO
-              format: "Taster: Doppelklick erkannt"
-          - lambda: |-
-              if (!id(pomodoro_enabled).state) return;
-              if (id(pomodoro_phase) != 2) {
-                id(pomodoro_phase) = 2;
-                id(pomodoro_phase_start) = millis();
-                id(pomodoro_last_blink_elapsed) = 0;
-                id(pomodoro_last_white_elapsed) = 0;
-                ESP_LOGI("timecube", "Pause per Doppelklick gestartet");
-              }
-          - script.execute:
-              id: pomodoro_blink
-              red: 0.3
-              green: 0.3
-              blue: 0.3
 
 # Button to Reset WiFi
 button:
@@ -416,40 +383,31 @@ text:
         id(activity_side_6).update();
         id(current_activity).update();
 
-# Pomodoro Timer an/aus (persistiert ueber Reboot)
-switch:
-  - platform: template
-    name: "Pomodoro Aktiv"
-    id: pomodoro_enabled
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-    turn_off_action:
-      - lambda: |-
-          id(pomodoro_phase) = 0;
-
-# Pomodoro Timer Einstellungen (persistiert ueber Reboot)
+# Tracking-Erinnerung & Zeitlimit (persistiert ueber Reboot)
 number:
+  # Kurzes Aufblinken alle X Minuten, solange getrackt wird (0 = aus)
   - platform: template
-    name: "Pomodoro Minuten (Min 1, Max 120)"
-    id: pomodoro_minutes
-    min_value: 1
-    max_value: 120
-    step: 1
+    name: "Erinnerung alle Minuten (0 = aus)"
+    id: reminder_minutes
+    min_value: 0
+    max_value: 240
+    step: 5
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 25
+    initial_value: 30
 
+  # Fallback: nach X Stunden auf derselben Seite wird das Tracking automatisch beendet
   - platform: template
-    name: "Pause Minuten (Min 1, Max 60)"
-    id: break_minutes
+    name: "Max. Tracking Stunden (Min 1, Max 24)"
+    id: max_tracking_hours
     min_value: 1
-    max_value: 60
+    max_value: 24
     step: 1
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 5
+    initial_value: 4
 
   # Helligkeit der blauen WLAN-Anzeige
   - platform: template
@@ -521,25 +479,15 @@ globals:
     restore_value: no
     initial_value: 'false'
 
-  - id: pomodoro_phase
-    type: int
-    restore_value: no
-    initial_value: '0'  # 0=idle, 1=work, 2=break
-
-  - id: pomodoro_phase_start
+  - id: reminder_count
     type: unsigned long
     restore_value: no
     initial_value: '0'
 
-  - id: pomodoro_last_blink_elapsed
-    type: unsigned long
+  - id: tracking_stopped
+    type: bool
     restore_value: no
-    initial_value: '0'
-
-  - id: pomodoro_last_white_elapsed
-    type: unsigned long
-    restore_value: no
-    initial_value: '0'
+    initial_value: 'false'
 
 
 # Scripts
@@ -596,12 +544,8 @@ script:
             id(activity_start_epoch) = now.is_valid() ? (unsigned long)now.timestamp : 0;
             id(current_activity).update();
 
-            // Jeder bestaetigte Flip startet einen frischen Pomodoro (Arbeitsphase), falls aktiviert
-            if (id(pomodoro_enabled).state) {
-              id(pomodoro_phase) = 1;
-              id(pomodoro_phase_start) = millis();
-              id(pomodoro_last_blink_elapsed) = 0;
-            }
+            id(reminder_count) = 0;
+            id(tracking_stopped) = false;
 
             ESP_LOGI("timecube", "Side confirmed: %d (%s)", current, id(current_activity).state.c_str());
           }
@@ -653,6 +597,15 @@ script:
             return;
           }
 
+          // Tracking per Zeitlimit beendet -> gedimmtes Lila, bis gekippt wird
+          if (id(tracking_stopped)) {
+            auto call = id(status_led).turn_on();
+            call.set_rgb(0.6f, 0.0f, 1.0f);
+            call.set_brightness(0.15f);
+            call.perform();
+            return;
+          }
+
           // Bereit, WiFi aktiv -> gedimmtes Blau
           auto call = id(status_led).turn_on();
           call.set_rgb(0.0f, 0.3f, 1.0f);
@@ -660,7 +613,7 @@ script:
           call.perform();
 
   # Kurzes Aufblitzen in gegebener Farbe, ohne die normale LED-Logik zu stoeren
-  - id: pomodoro_blink
+  - id: led_blink
     parameters:
       red: float
       green: float
@@ -673,70 +626,46 @@ script:
           green: !lambda 'return green;'
           blue: !lambda 'return blue;'
           brightness: 100%
-      - delay: 200ms
+      - delay: 300ms
       - light.turn_off: status_led
       - lambda: 'id(led_override_active) = false;'
 
-  # Pomodoro-Zustandsautomat: startet bei jedem bestaetigten Flip (siehe check_debounce),
-  # laeuft Arbeit -> Pause -> Stopp (kein Auto-Loop), alle 1s geprueft.
-  - id: check_pomodoro
+  # Alle 1s: freundliche Erinnerung, dass getrackt wird, und Zeitlimit als Fallback
+  # (z.B. Wuerfel abends vergessen -> trackt nicht die ganze Nacht).
+  - id: check_tracking
     then:
       - lambda: |-
-          if (!id(pomodoro_enabled).state) {
-            id(pomodoro_phase) = 0;
-            return;
-          }
+          if (id(activity_start) == 0) return;  // nichts aktiv
 
-          int phase = id(pomodoro_phase);
-          if (phase == 0) return;
+          unsigned long elapsed = (millis() - id(activity_start)) / 1000;
 
-          unsigned long elapsed = (millis() - id(pomodoro_phase_start)) / 1000;
-
-          if (phase == 1) {
-            unsigned long work_sec = (unsigned long)(id(pomodoro_minutes).state * 60);
-            if (elapsed >= work_sec) {
-              id(pomodoro_phase) = 2;
-              id(pomodoro_phase_start) = millis();
-              id(pomodoro_last_blink_elapsed) = 0;
-              id(pomodoro_last_white_elapsed) = 0;
-              ESP_LOGI("timecube", "Pomodoro: Arbeit fertig, Pause beginnt");
-              return;
-            }
-            // Alle 5 Minuten gelb blinken
-            if (elapsed - id(pomodoro_last_blink_elapsed) >= 300) {
-              id(pomodoro_last_blink_elapsed) = elapsed;
-              id(pomodoro_blink).execute(1.0f, 1.0f, 0.0f);
-            }
-            return;
-          }
-
-          // phase == 2: Pause
-          unsigned long break_sec = (unsigned long)(id(break_minutes).state * 60);
-          if (elapsed >= break_sec) {
-            log_break(break_sec);
+          unsigned long max_sec = (unsigned long)(id(max_tracking_hours).state * 3600);
+          if (elapsed >= max_sec) {
+            id(activity_duration).publish_state(max_sec);
+            log_activity(id(last_side), max_sec);
             id(csv_export).update();
             id(log_count).update();
-            id(pomodoro_phase) = 0;
-            ESP_LOGI("timecube", "Pomodoro: Pause fertig");
-            id(pomodoro_blink).execute(0.3f, 0.3f, 0.3f);
+            clear_checkpoint();
+            id(activity_start) = 0;
+            id(activity_start_epoch) = 0;
+            id(tracking_stopped) = true;
+            id(current_activity).publish_state("Gestoppt (Zeitlimit)");
+            ESP_LOGW("timecube", "Zeitlimit erreicht: Seite %d nach %lu s automatisch beendet", id(last_side), max_sec);
             return;
           }
-          // Alle 2 min kurzes weisses Aufblitzen: Wuerfel trackt die Pause
-          if (elapsed - id(pomodoro_last_white_elapsed) >= 120) {
-            id(pomodoro_last_white_elapsed) = elapsed;
-            id(pomodoro_blink).execute(0.3f, 0.3f, 0.3f);
-          }
-          // Erste 30s: alle 5s rot blinken, danach alle 30s
-          unsigned long blink_interval = (elapsed < 30) ? 5 : 30;
-          if (elapsed - id(pomodoro_last_blink_elapsed) >= blink_interval) {
-            id(pomodoro_last_blink_elapsed) = elapsed;
-            id(pomodoro_blink).execute(1.0f, 0.0f, 0.0f);
+
+          unsigned long reminder_sec = (unsigned long)(id(reminder_minutes).state * 60);
+          if (reminder_sec == 0) return;
+          unsigned long due = elapsed / reminder_sec;
+          if (due > id(reminder_count)) {
+            id(reminder_count) = due;
+            id(led_blink).execute(1.0f, 0.5f, 0.0f);  // Orange
           }
 
   - id: save_checkpoint_tick
     then:
       - lambda: |-
-          if (id(last_side) >= 1 && id(last_side) <= 6) {
+          if (id(activity_start) > 0 && id(last_side) >= 1 && id(last_side) <= 6) {
             save_checkpoint(id(last_side), id(activity_start_epoch));
           }
 
@@ -752,7 +681,7 @@ interval:
 
   - interval: 1s
     then:
-      - script.execute: check_pomodoro
+      - script.execute: check_tracking
 
   - interval: 60s
     then:
