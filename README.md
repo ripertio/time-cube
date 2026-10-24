@@ -34,7 +34,7 @@ A DIY physical time-tracking cube powered by an ESP32-S3 and an MPU-6050 orienta
 | SCL          | GPIO 9       |
 | VCC          | 3.3V         |
 | GND          | GND          |
-| Reset Button | GPIO         |
+| Button       | GPIO13 ↔ GND |
 
 > Adjust GPIO pins to match your specific wiring if different.
 

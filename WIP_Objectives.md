@@ -20,5 +20,6 @@
 - [ ] Verify power-loss recovery (test procedure in README.md, Status section)
 - [x] Extra button: implement input handling and LED feedback
   - [ ] Hold: toggle WiFi on/off (LED indicates state)
-  - [ ] Single press: skip / reactivate current side (LED indicates state)
-  - [ ] Double press: break (LED indicates break)
+  - [x] Single press: reactivate current side (after auto-stop / to end a break)
+  - [x] Double press: break (LED indicates break)
+- [x] Cube on a corner (no clear side) = break, logged as "Pause"

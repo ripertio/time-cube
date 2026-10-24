@@ -161,6 +161,9 @@ sensor:
       if (y < -8.0) return 4;
       if (x > 8.0) return 5;
       if (x < -8.0) return 6;
+
+      // Keine Achse eindeutig (z.B. auf einer Ecke im Halter) -> 0 = Pause
+      if (fabsf(x) < 7.5f && fabsf(y) < 7.5f && fabsf(z) < 7.5f) return 0;
       
       return id(current_side).state;
     on_value:
@@ -189,8 +192,7 @@ text_sensor:
     id: current_activity
     update_interval: never
     lambda: |-
-      int side = (int)id(current_side).state;
-      return get_activity_name(side);
+      return get_activity_name(id(last_side));
   
   # CSV Export
   - platform: template
@@ -255,10 +257,10 @@ binary_sensor:
   - platform: status
     name: "Status"
 
-  # Taster gegen GND: 3s halten schaltet WLAN um
+  # Taster gegen GND: Klick = Seite (re)aktivieren, Doppelklick = Pause, 3s halten = WLAN an/aus
   - platform: gpio
     pin:
-      number: GPIO4
+      number: GPIO13
       mode:
         input: true
         pullup: true
@@ -288,6 +290,45 @@ binary_sensor:
                 - wifi.enable:
               else:
                 - wifi.disable:
+
+    on_multi_click:
+      # Klick: Tracking der Seite fortsetzen, auf der der Wuerfel liegt
+      # (nach Zeitlimit-Stopp oder um eine Pause zu beenden)
+      - timing:
+          - ON for at most 1s
+          - OFF for at least 400ms
+        then:
+          - lambda: |-
+              bool on_break = id(last_side) == 0 && id(activity_start) > 0;
+              if (!id(tracking_stopped) && !on_break) return;  // laeuft bereits normal
+
+              float st = id(current_side).state;
+              int phys = std::isnan(st) ? 0 : (int)st;
+              if (phys < 1 || phys > 6) {
+                // Liegt auf einer Ecke: gestoppte Pause wieder aufnehmen, sonst nichts zu tun
+                if (id(tracking_stopped) && id(last_side) == 0) id(switch_to_side).execute(0);
+                return;
+              }
+              id(is_debouncing) = false;
+              id(break_hold_side) = 0;
+              id(switch_to_side).execute(phys);
+              ESP_LOGI("timecube", "Taster: Seite %d reaktiviert", phys);
+
+      # Doppelklick: Pause starten, ohne den Wuerfel zu bewegen
+      - timing:
+          - ON for at most 1s
+          - OFF for at most 300ms
+          - ON for at most 1s
+          - OFF for at least 400ms
+        then:
+          - lambda: |-
+              if (id(last_side) == 0 && id(activity_start) > 0) return;  // schon in Pause
+              // Physische Seite merken, damit sie die Pause nicht sofort wieder beendet
+              id(break_hold_side) = id(last_side) > 0 ? id(last_side) : 0;
+              id(is_debouncing) = false;
+              id(switch_to_side).execute(0);
+              id(break_lock_start) = millis();
+              ESP_LOGI("timecube", "Taster: Pause per Doppelklick gestartet");
 
 # Button to Reset WiFi
 button:
@@ -427,7 +468,7 @@ globals:
   - id: last_side
     type: int
     restore_value: no
-    initial_value: '0'
+    initial_value: '-1'  # -1 = noch nichts, 0 = Pause, 1-6 = Seite
   
   - id: pending_side
     type: int
@@ -489,6 +530,18 @@ globals:
     restore_value: no
     initial_value: 'false'
 
+  # Seite, auf der der Wuerfel beim Doppelklick lag (wird waehrend der Pause ignoriert)
+  - id: break_hold_side
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  # Start der Doppelklick-Pause: die ersten 15s beendet kein Seitenwechsel die Pause
+  - id: break_lock_start
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
 
 # Scripts
 script:
@@ -496,6 +549,15 @@ script:
     then:
       - lambda: |-
           int new_side = (int)id(current_side).state;
+
+          // Pause per Doppelklick: Wuerfel liegt noch auf der alten Seite -> ignorieren
+          if (id(break_hold_side) > 0) {
+            if (new_side == id(break_hold_side)) {
+              id(is_debouncing) = false;
+              return;
+            }
+            if (new_side == 0) id(break_hold_side) = 0;  // jetzt physisch auf der Ecke
+          }
           
           // Kein Unterschied zur aktuell bestätigten Seite -> nichts zu tun
           if (new_side == id(last_side)) return;
@@ -523,32 +585,49 @@ script:
             return;
           }
           
+          // Doppelklick-Pause laeuft < 15s -> Seitenwechsel erst danach bestaetigen
+          if (id(last_side) == 0 && id(break_lock_start) > 0 &&
+              millis() - id(break_lock_start) < 15000) return;
+
           // 2s stabil? -> bestätigen
           if (millis() - id(debounce_start) > 2000) {
             id(is_debouncing) = false;
-            
-            unsigned long duration = 0;
-            if (id(activity_start) > 0) {
-              duration = (millis() - id(activity_start)) / 1000;
-              id(activity_duration).publish_state(duration);
-              
-              log_activity(id(last_side), duration);
-              id(csv_export).update();
-              id(log_count).update();
-            }
-            
-            id(last_side) = current;
-            id(green_flash_until) = millis() + 5000;
-            id(activity_start) = millis();
-            auto now = id(sntp_time).now();
-            id(activity_start_epoch) = now.is_valid() ? (unsigned long)now.timestamp : 0;
-            id(current_activity).update();
-
-            id(reminder_count) = 0;
-            id(tracking_stopped) = false;
-
-            ESP_LOGI("timecube", "Side confirmed: %d (%s)", current, id(current_activity).state.c_str());
+            if (id(break_hold_side) > 0 && current == id(break_hold_side)) return;
+            id(break_hold_side) = 0;
+            id(switch_to_side).execute(current);
           }
+
+  # Laufende Sitzung loggen und neue starten (0 = Pause, 1-6 = Seite)
+  - id: switch_to_side
+    parameters:
+      side: int
+    then:
+      - lambda: |-
+          if (id(activity_start) > 0) {
+            unsigned long duration = (millis() - id(activity_start)) / 1000;
+            id(activity_duration).publish_state(duration);
+            log_activity(id(last_side), duration);
+            id(csv_export).update();
+            id(log_count).update();
+          }
+
+          id(last_side) = side;
+          id(activity_start) = millis();
+          auto now = id(sntp_time).now();
+          id(activity_start_epoch) = now.is_valid() ? (unsigned long)now.timestamp : 0;
+          id(reminder_count) = 0;
+          id(tracking_stopped) = false;
+          id(current_activity).update();
+
+          if (side > 0) {
+            id(green_flash_until) = millis() + 5000;
+          } else {
+            id(green_flash_until) = 0;
+            id(led_blink).execute(0.0f, 1.0f, 0.8f);  // Tuerkis: Pause beginnt
+          }
+
+          ESP_LOGI("timecube", "Side confirmed: %d (%s)", side, id(current_activity).state.c_str());
+
   - id: update_led
     then:
       - lambda: |-
@@ -602,6 +681,17 @@ script:
             auto call = id(status_led).turn_on();
             call.set_rgb(0.6f, 0.0f, 1.0f);
             call.set_brightness(0.15f);
+            call.perform();
+            return;
+          }
+
+          // Pause -> langsames, sanftes Tuerkis-Pulsieren
+          if (id(last_side) == 0 && id(activity_start) > 0) {
+            float phase = (millis() % 4000) / 4000.0f;
+            float tri = phase < 0.5f ? phase * 2.0f : (1.0f - phase) * 2.0f;
+            auto call = id(status_led).turn_on();
+            call.set_rgb(0.0f, 1.0f, 0.8f);
+            call.set_brightness(0.03f + 0.15f * tri);
             call.perform();
             return;
           }
@@ -665,7 +755,7 @@ script:
   - id: save_checkpoint_tick
     then:
       - lambda: |-
-          if (id(activity_start) > 0 && id(last_side) >= 1 && id(last_side) <= 6) {
+          if (id(activity_start) > 0 && id(last_side) >= 0 && id(last_side) <= 6) {
             save_checkpoint(id(last_side), id(activity_start_epoch));
           }
 

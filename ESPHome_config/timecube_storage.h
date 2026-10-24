@@ -145,6 +145,7 @@ void load_config() {
 }
 
 std::string get_activity_name(int side) {
+  if (side == 0) return "Pause";  // Seite 0 = keine eindeutige Seite / Doppelklick
   return activity_names.count(side) ? activity_names[side] : "Unbekannt";
 }
 
@@ -188,8 +189,9 @@ static void tc_write_entry(int side, uint32_t datetime, uint32_t duration) {
   ESP_LOGI("timecube", "Logged [%u/%u]: Seite %d | %u s", slot + 1, max, side, duration);
 }
 
+// Seite 0 = Pause
 void log_activity(int side, unsigned long duration) {
-  if (side < 1 || side > 6 || duration == 0) return;
+  if (side < 0 || side > 6 || duration == 0) return;
   auto t = id(sntp_time).now();
   uint32_t dt = t.is_valid() ? pack_datetime(t.year, t.month, t.day_of_month, t.hour, t.minute, t.second) : 0;
   tc_write_entry(side, dt, (uint32_t)duration);
@@ -205,7 +207,7 @@ struct __attribute__((packed)) TcCheckpoint {
 };
 
 void save_checkpoint(int side, unsigned long start_epoch) {
-  if (side < 1 || side > 6 || start_epoch == 0) return;
+  if (side < 0 || side > 6 || start_epoch == 0) return;
   auto t = id(sntp_time).now();
   if (!t.is_valid()) return;
 
@@ -243,7 +245,7 @@ void recover_checkpoint() {
   nvs_close(h);
   if (!have) return;
 
-  if (ckpt.side >= 1 && ckpt.side <= 6 && ckpt.last_seen_epoch > ckpt.start_epoch) {
+  if (ckpt.side <= 6 && ckpt.last_seen_epoch > ckpt.start_epoch) {
     uint32_t duration = ckpt.last_seen_epoch - ckpt.start_epoch;
     // Zeitlimit gilt auch fuer wiederhergestellte Sitzungen (z.B. Akku ueber Nacht leer)
     uint32_t max_sec = (uint32_t)(id(max_tracking_hours).state * 3600);
