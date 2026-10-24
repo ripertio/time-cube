@@ -536,7 +536,7 @@ globals:
     restore_value: no
     initial_value: '0'
 
-  # Start der Doppelklick-Pause: die ersten 15s beendet kein Seitenwechsel die Pause
+  # Start der Doppelklick-Pause: in den ersten 15s wird der Wuerfel abgelegt, ohne die Pause zu beenden
   - id: break_lock_start
     type: unsigned long
     restore_value: no
@@ -585,13 +585,20 @@ script:
             return;
           }
           
-          // Doppelklick-Pause laeuft < 15s -> Seitenwechsel erst danach bestaetigen
-          if (id(last_side) == 0 && id(break_lock_start) > 0 &&
-              millis() - id(break_lock_start) < 15000) return;
-
           // 2s stabil? -> bestätigen
           if (millis() - id(debounce_start) > 2000) {
             id(is_debouncing) = false;
+
+            // Innerhalb 15s nach Doppelklick: Wuerfel wird in der Pause abgelegt,
+            // die neue Seite gehoert zur Pause (erst ein spaeterer Flip/Klick beendet sie)
+            if (id(last_side) == 0 && id(break_lock_start) > 0 &&
+                millis() - id(break_lock_start) < 15000) {
+              id(break_hold_side) = current;
+              id(led_blink).execute(0.0f, 1.0f, 0.8f);  // Tuerkis: Pause bleibt
+              ESP_LOGI("timecube", "Pause: Wuerfel auf Seite %d abgelegt", current);
+              return;
+            }
+
             if (id(break_hold_side) > 0 && current == id(break_hold_side)) return;
             id(break_hold_side) = 0;
             id(switch_to_side).execute(current);
