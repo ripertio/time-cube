@@ -17,8 +17,15 @@ inner_cavity_wall = 2;   // wall thickness around the internal cavity [mm]
 snap_tab_inset = 4;       // distance of the snap tabs from the cover edge [mm]
 snap_tab_width = 3.2;     // width of each snap tab [mm]
 snap_tab_depth = 2.0;     // depth of each snap tab measured along the edge [mm]
-snap_tab_height = 1.2;    // how far the tab protrudes below the lid [mm]
-snap_recess_extra = 0.3;  // extra clearance for the matching recess [mm]
+snap_tab_height = 2.2;   // how far the tab protrudes below the lid [mm]
+snap_recess_extra = 0.15; // total extra clearance for the matching recess, split across both sides [mm]
+snap_tab_chamfer = 0.4;   // lead-in taper at the tab tip [mm]
+snap_rib_width = 0.6;     // width (X) of each crush rib on the tab's Y faces [mm]
+snap_rib_crush = 0.15;    // how far each rib protrudes from the tab face; exceeds the per-side clearance, so it grips [mm]
+
+rabbet_width = 1;         // width of the stepped lip around the seam [mm]
+rabbet_height = 1;        // height of the stepped lip [mm]
+rabbet_clearance = 0.15;  // gap between the cover lip and the base step, horizontally and vertically [mm]
 
 battery_length = 25;  // battery pocket length, along X [mm]
 battery_width = 6.2;    // battery pocket width, along Y [mm]
@@ -255,12 +262,39 @@ module rounded_cube(s, r) {
     }
 }
 
+// rounded_cube shrunk by inset on every side, following the outer rounding
+module inset_rounded_cube(inset) {
+    translate([inset, inset, inset])
+        rounded_cube(size - 2 * inset, corner_r - inset);
+}
+
+// Snap tab hanging from the cover (z=0 is the tab tip). The tip is tapered for
+// lead-in; crush ribs on the Y faces take up the recess clearance.
+module snap_tab() {
+    c = snap_tab_chamfer;
+    hull() {
+        translate([c, c, 0])
+            cube([snap_tab_width - 2 * c, snap_tab_depth - 2 * c, eps]);
+        translate([0, 0, c])
+            cube([snap_tab_width, snap_tab_depth, snap_tab_height - c + eps]); // eps: overlap into the cover
+    }
+    for (y = [-snap_rib_crush, snap_tab_depth - eps])
+        translate([(snap_tab_width - snap_rib_width) / 2, y, c])
+            cube([snap_rib_width, snap_rib_crush + eps, snap_tab_height - c]);
+}
+
 module base() {
     difference() {
         intersection() {
             rounded_cube(size, corner_r);
             translate([-1, -1, -1])
                 cube([size + 2, size + 2, size - split_h + 1]);
+        }
+        // rabbet: step the outer rim down so the cover lip can seat over it
+        difference() {
+            translate([-1, -1, size - split_h - rabbet_height])
+                cube([size + 2, size + 2, rabbet_height + 1]);
+            inset_rounded_cube(rabbet_width);
         }
         // matching recesses for the lid snap tabs
         for (p = snap_positions)
@@ -333,8 +367,14 @@ module cover() {
         difference() {
             intersection() {
                 rounded_cube(size, corner_r);
-                translate([-1, -1, size - split_h])
-                    cube([size + 2, size + 2, split_h + 1]);
+                translate([-1, -1, size - split_h - rabbet_height + rabbet_clearance])
+                    cube([size + 2, size + 2, split_h + rabbet_height - rabbet_clearance + 1]);
+            }
+            // hollow the lip so only a rim ring hangs below the mating face
+            intersection() {
+                inset_rounded_cube(rabbet_width + rabbet_clearance);
+                translate([-1, -1, size - split_h - rabbet_height])
+                    cube([size + 2, size + 2, rabbet_height]);
             }
             // USB-C charging slot, straight through the cover, above the ESP's socket
             translate([usbc_x_center, usbc_y_center, size - split_h / 2])
@@ -350,7 +390,7 @@ module cover() {
         // Protruding snap tabs engage the matching clearance recesses in the base.
         for (p = snap_positions)
             translate([p[0], p[1], size - split_h - snap_tab_height])
-                cube([snap_tab_width, snap_tab_depth, snap_tab_height]);
+                snap_tab();
     }
 }
 
