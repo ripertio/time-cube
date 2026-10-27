@@ -136,7 +136,10 @@ corridor_width = 5;        // width of the side (Y-bar) corridor, along X [mm]
 corridor_x_min = size / 2 + esp_width / 2 + wire_clearance; // just clear of the wider (ESP) board
 corridor_y_start = battery_offset_y + battery_width;        // battery's back edge
 
-spur_battery_width = 4;      // channel<->corridor spur width, sized for the battery's 2 cables [mm]
+barrier_notch_width = 8;     // X width of the cut through the battery/ESP wall, for the ESP's +/- solder joints [mm]
+barrier_notch_x_start = size / 2 + esp_width / 2 - barrier_notch_width; // flush with the ESP's high-X edge, where the corridor begins [mm]
+
+spur_battery_width = 4;     // channel<->corridor spur width, sized for the battery's 2 cables [mm]
 spur_battery_y_center = cable_channel_y_start + cable_channel_length / 2; // feed the gap at its center
 spur_battery_x_start = (size + cable_channel_width) / 2 - 0.5; // overlap into the channel slightly
 
@@ -315,6 +318,9 @@ module base() {
         // wiring: spur connecting the corridor to the cable_channel (battery's cables)
         translate([spur_battery_x_start, spur_battery_y_center - spur_battery_width / 2, size - split_h - wire_depth])
             cube([corridor_x_min - spur_battery_x_start, spur_battery_width, wire_depth + eps]);
+        // wiring: notch through the battery/ESP wall, wire_depth deep like the other channels
+        translate([barrier_notch_x_start, corridor_y_start - eps, size - split_h - wire_depth])
+            cube([barrier_notch_width, esp_y_start - corridor_y_start + 2 * eps, wire_depth + eps]);
         // Separate open-top routes connect each Y-spaced button pin directly
         // to the existing wire corridor, so attached leads can be loaded from above.
         button_pin_wire_channels();
