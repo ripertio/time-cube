@@ -151,14 +151,10 @@ All settings are in the web interface at `http://timecube.local` and are kept ac
 | Erinnerung alle Minuten (0 = aus)      | 30      | 0–240 min | Interval of the orange reminder blink               |
 | Max. Tracking Stunden                  | 4       | 1–24 h    | Auto-stop after this many hours on one face         |
 | WLAN LED Helligkeit                    | 20 %    | 1–100 %   | Brightness of the blue idle LED                     |
-
-Timing constants are set as `substitutions` at the top of [timecube.yaml](ESPHome_config/timecube.yaml):
-
-| Substitution     | Default  | Meaning                                                        |
-| ---------------- | -------- | -------------------------------------------------------------- |
-| `debounce_ms`    | 2000     | How long a face must stay up before a change is confirmed      |
-| `break_grace_ms` | 15000    | Time after a double click during which the cube can be put down without ending the break |
-| `break_rgb`      | turquoise | LED color for breaks                                          |
+| Entprellzeit                           | 1 s     | 0.2–10 s  | How long a face must stay up before a change is confirmed |
+| Pause Karenzzeit                       | 15 s    | 1–120 s   | Time after a double click during which the cube can be put down without ending the break |
+| Pause LED Rot / Gruen / Blau           | 0 / 100 / 80 % | 0–100 % | LED color for breaks (default turquoise)     |
+| Pause LED Helligkeit                   | 18 %    | 1–100 %   | Peak brightness of the break pulse (minimum is 1/6 of it) |
 
 Buttons in the web interface: **Restart**, **CSV Aktualisieren** (refresh the export), **Log Loeschen** (clear all logs) and **WiFi Reset (Factory Reset)**.
 

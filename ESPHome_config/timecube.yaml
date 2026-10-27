@@ -1,29 +1,25 @@
 esphome:
   name: timecube
   friendly_name: Time Cube
-  
   includes:
     - timecube_storage.h
     - timecube_dashboard.h
-
   on_boot:
-   - priority: -100
-     then:
-       - lambda: |-
-          ESP_LOGI("timecube", "Time Cube gestartet!");
-          setup_littlefs();
-          load_config();
-          register_dashboard_handler();
-          id(wifi_user_enabled) = true;
-       - wifi.enable:
+    - priority: -100
+      then:
+        - lambda: |-
+            ESP_LOGI("timecube", "Time Cube gestartet!");
+            setup_littlefs();
+            load_config();
+            register_dashboard_handler();
+            id(wifi_user_enabled) = true;
+        - wifi.enable:
 
 esp32:
   board: esp32-s3-devkitc-1
   framework:
     type: esp-idf
   partitions: partitions_timecube.csv
-
-# ... (Rest bleibt EXAKT GLEICH wie vorher!)
 
 # WiFi Configuration (keine hardcoded Credentials!)
 wifi:
@@ -54,7 +50,6 @@ logger:
     sensor: INFO
     web_server: INFO
 
-
 api:
   services:
     # Namen ändern
@@ -71,13 +66,13 @@ api:
             id(activity_side_4).update();
             id(activity_side_5).update();
             id(activity_side_6).update();
-    
+
     # CSV Export triggern
     - service: export_csv
       then:
         - lambda: |-
             id(csv_export).update();
-    
+
     # Log löschen
     - service: clear_log
       then:
@@ -85,6 +80,7 @@ api:
             clear_log();
             id(csv_export).update();
             id(log_count).update();
+
 # Web Server for Dashboard + WiFi Management
 web_server_base:
   id: base_web_server
@@ -94,6 +90,28 @@ web_server:
   port: 80
   version: 3
   local: true
+  sorting_groups:
+    - id: grp_aktuell
+      name: "Aktuell"
+      sorting_weight: 10
+    - id: grp_seiten
+      name: "Seitennamen"
+      sorting_weight: 20
+    - id: grp_tracking
+      name: "Tracking"
+      sorting_weight: 30
+    - id: grp_pause
+      name: "Pause"
+      sorting_weight: 40
+    - id: grp_wlan
+      name: "WLAN"
+      sorting_weight: 50
+    - id: grp_daten
+      name: "Daten"
+      sorting_weight: 60
+    - id: grp_system
+      name: "System"
+      sorting_weight: 70
 
 # Time Component (NTP)
 time:
@@ -111,7 +129,7 @@ i2c:
   scl: GPIO9
   scan: true
   frequency: 100kHz
-  
+
 light:
   - platform: esp32_rmt_led_strip
     id: status_led
@@ -121,6 +139,9 @@ light:
     chipset: WS2812
     rgb_order: GRB
     name: "Status LED"
+    web_server:
+      sorting_group_id: grp_aktuell
+      sorting_weight: 4
     default_transition_length: 0s
 
 
@@ -144,17 +165,23 @@ sensor:
 
   - platform: wifi_signal
     name: "WiFi Signal"
+    web_server:
+      sorting_group_id: grp_wlan
+      sorting_weight: 2
     update_interval: 60s
 
   - platform: template
     name: "Current Side"
+    web_server:
+      sorting_group_id: grp_aktuell
+      sorting_weight: 2
     id: current_side
     update_interval: 3s
     lambda: |-
       float x = id(accel_x).state;
       float y = id(accel_y).state;
       float z = id(accel_z).state;
-      
+
       if (z > 8.0) return 1;
       if (z < -8.0) return 2;
       if (y > 8.0) return 3;
@@ -164,7 +191,7 @@ sensor:
 
       // Keine Achse eindeutig (z.B. auf einer Ecke im Halter) -> 0 = Pause
       if (fabsf(x) < 7.5f && fabsf(y) < 7.5f && fabsf(z) < 7.5f) return 0;
-      
+
       return id(current_side).state;
     on_value:
       then:
@@ -172,13 +199,18 @@ sensor:
 
   - platform: template
     name: "Activity Duration"
+    web_server:
+      sorting_group_id: grp_aktuell
+      sorting_weight: 3
     id: activity_duration
     unit_of_measurement: "s"
     accuracy_decimals: 0
-  
-  # ← HIER FEHLT LOG COUNT!
+
   - platform: template
     name: "Log Count"
+    web_server:
+      sorting_group_id: grp_daten
+      sorting_weight: 2
     id: log_count
     update_interval: 60s
     accuracy_decimals: 0
@@ -189,19 +221,25 @@ sensor:
 text_sensor:
   - platform: template
     name: "Current Activity"
+    web_server:
+      sorting_group_id: grp_aktuell
+      sorting_weight: 1
     id: current_activity
     update_interval: never
     lambda: |-
       return get_activity_name(id(last_side));
-  
+
   # CSV Export
   - platform: template
     name: "CSV Export"
+    web_server:
+      sorting_group_id: grp_daten
+      sorting_weight: 1
     id: csv_export
     update_interval: never
     lambda: |-
       return get_csv_content();
-  
+
   # Seitennamen als Text Sensors
   - platform: template
     name: "Activity Side 1"
@@ -210,7 +248,7 @@ text_sensor:
     update_interval: 60s
     lambda: |-
       return get_activity_name(1);
-  
+
   - platform: template
     name: "Activity Side 2"
     id: activity_side_2
@@ -218,7 +256,7 @@ text_sensor:
     update_interval: 60s
     lambda: |-
       return get_activity_name(2);
-  
+
   - platform: template
     name: "Activity Side 3"
     id: activity_side_3
@@ -226,7 +264,7 @@ text_sensor:
     update_interval: 60s
     lambda: |-
       return get_activity_name(3);
-  
+
   - platform: template
     name: "Activity Side 4"
     id: activity_side_4
@@ -234,7 +272,7 @@ text_sensor:
     update_interval: 60s
     lambda: |-
       return get_activity_name(4);
-  
+
   - platform: template
     name: "Activity Side 5"
     id: activity_side_5
@@ -242,7 +280,7 @@ text_sensor:
     update_interval: 60s
     lambda: |-
       return get_activity_name(5);
-  
+
   - platform: template
     name: "Activity Side 6"
     id: activity_side_6
@@ -250,12 +288,14 @@ text_sensor:
     update_interval: 60s
     lambda: |-
       return get_activity_name(6);
-      
 
 # Binary Sensor for WiFi Status
 binary_sensor:
   - platform: status
     name: "Status"
+    web_server:
+      sorting_group_id: grp_wlan
+      sorting_weight: 3
 
   # Taster gegen GND: Klick = Seite (re)aktivieren, Doppelklick = Pause, 3s halten = WLAN an/aus
   - platform: gpio
@@ -266,6 +306,9 @@ binary_sensor:
         pullup: true
       inverted: true
     name: "Taster"
+    web_server:
+      sorting_group_id: grp_system
+      sorting_weight: 3
     id: main_button
     filters:
       - delayed_on_off: 20ms
@@ -334,13 +377,22 @@ binary_sensor:
 button:
   - platform: restart
     name: "Restart"
-  
+    web_server:
+      sorting_group_id: grp_system
+      sorting_weight: 1
+
   - platform: factory_reset
     name: "WiFi Reset (Factory Reset)"
+    web_server:
+      sorting_group_id: grp_system
+      sorting_weight: 2
     id: wifi_reset_button
 
   - platform: template
     name: "CSV Aktualisieren"
+    web_server:
+      sorting_group_id: grp_daten
+      sorting_weight: 3
     on_press:
       then:
         - lambda: |-
@@ -349,6 +401,9 @@ button:
 
   - platform: template
     name: "Log Loeschen"
+    web_server:
+      sorting_group_id: grp_daten
+      sorting_weight: 4
     on_press:
       then:
         - lambda: |-
@@ -360,6 +415,9 @@ button:
 text:
   - platform: template
     name: "Seite 1 Name"
+    web_server:
+      sorting_group_id: grp_seiten
+      sorting_weight: 1
     id: name_input_1
     mode: text
     lambda: return {activity_names[1]};
@@ -371,6 +429,9 @@ text:
 
   - platform: template
     name: "Seite 2 Name"
+    web_server:
+      sorting_group_id: grp_seiten
+      sorting_weight: 2
     id: name_input_2
     mode: text
     lambda: return {activity_names[2]};
@@ -382,6 +443,9 @@ text:
 
   - platform: template
     name: "Seite 3 Name"
+    web_server:
+      sorting_group_id: grp_seiten
+      sorting_weight: 3
     id: name_input_3
     mode: text
     lambda: return {activity_names[3]};
@@ -393,6 +457,9 @@ text:
 
   - platform: template
     name: "Seite 4 Name"
+    web_server:
+      sorting_group_id: grp_seiten
+      sorting_weight: 4
     id: name_input_4
     mode: text
     lambda: return {activity_names[4]};
@@ -404,6 +471,9 @@ text:
 
   - platform: template
     name: "Seite 5 Name"
+    web_server:
+      sorting_group_id: grp_seiten
+      sorting_weight: 5
     id: name_input_5
     mode: text
     lambda: return {activity_names[5]};
@@ -415,6 +485,9 @@ text:
 
   - platform: template
     name: "Seite 6 Name"
+    web_server:
+      sorting_group_id: grp_seiten
+      sorting_weight: 6
     id: name_input_6
     mode: text
     lambda: return {activity_names[6]};
@@ -429,6 +502,9 @@ number:
   # Kurzes Aufblinken alle X Minuten, solange getrackt wird (0 = aus)
   - platform: template
     name: "Erinnerung alle Minuten (0 = aus)"
+    web_server:
+      sorting_group_id: grp_tracking
+      sorting_weight: 1
     id: reminder_minutes
     min_value: 0
     max_value: 240
@@ -441,6 +517,9 @@ number:
   # Fallback: nach X Stunden auf derselben Seite wird das Tracking automatisch beendet
   - platform: template
     name: "Max. Tracking Stunden (Min 1, Max 24)"
+    web_server:
+      sorting_group_id: grp_tracking
+      sorting_weight: 2
     id: max_tracking_hours
     min_value: 1
     max_value: 24
@@ -453,6 +532,9 @@ number:
   # Helligkeit der blauen WLAN-Anzeige
   - platform: template
     name: "WLAN LED Helligkeit"
+    web_server:
+      sorting_group_id: grp_wlan
+      sorting_weight: 1
     id: wifi_led_brightness
     min_value: 1
     max_value: 100
@@ -461,7 +543,101 @@ number:
     mode: slider
     optimistic: true
     restore_value: true
-    initial_value: 20
+    initial_value: 30
+
+  # Seite muss so lange stabil liegen, bevor ein Wechsel bestaetigt wird
+  - platform: template
+    name: "Entprellzeit"
+    web_server:
+      sorting_group_id: grp_tracking
+      sorting_weight: 3
+    id: debounce_seconds
+    min_value: 0.2
+    max_value: 10
+    step: 0.1
+    unit_of_measurement: "s"
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 1
+
+  # Nach einem Doppelklick: so lange darf der Wuerfel abgelegt werden, ohne die Pause zu beenden
+  - platform: template
+    name: "Pause Karenzzeit"
+    web_server:
+      sorting_group_id: grp_pause
+      sorting_weight: 1
+    id: break_grace_seconds
+    min_value: 1
+    max_value: 120
+    step: 1
+    unit_of_measurement: "s"
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 15
+
+  # LED-Farbe fuer Pause (Blinken + Pulsieren)
+  - platform: template
+    name: "Pause LED Rot"
+    web_server:
+      sorting_group_id: grp_pause
+      sorting_weight: 2
+    id: break_red
+    min_value: 0
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+
+  - platform: template
+    name: "Pause LED Gruen"
+    web_server:
+      sorting_group_id: grp_pause
+      sorting_weight: 3
+    id: break_green
+    min_value: 0
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+
+  - platform: template
+    name: "Pause LED Blau"
+    web_server:
+      sorting_group_id: grp_pause
+      sorting_weight: 4
+    id: break_blue
+    min_value: 0
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+
+  # Maximale Helligkeit des Pausen-Pulsierens (Minimum = 1/6 davon)
+  - platform: template
+    name: "Pause LED Helligkeit"
+    web_server:
+      sorting_group_id: grp_pause
+      sorting_weight: 5
+    id: break_led_brightness
+    min_value: 1
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    optimistic: true
+    restore_value: true
+    initial_value: 18
 
 # Global Variables
 globals:
@@ -469,17 +645,17 @@ globals:
     type: int
     restore_value: no
     initial_value: '-1'  # -1 = noch nichts, 0 = Pause, 1-6 = Seite
-  
+
   - id: pending_side
     type: int
     restore_value: no
     initial_value: '0'
-  
+
   - id: debounce_start
     type: unsigned long
     restore_value: no
     initial_value: '0'
-  
+
   - id: activity_start
     type: unsigned long
     restore_value: no
@@ -494,7 +670,7 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-  
+
   - id: wifi_connected
     type: bool
     restore_value: no
@@ -530,13 +706,14 @@ globals:
     restore_value: no
     initial_value: 'false'
 
-  # Seite, auf der der Wuerfel beim Doppelklick lag (wird waehrend der Pause ignoriert)
+  # Seite, die waehrend der Pause ignoriert wird: beim Doppelklick die aktuelle Seite,
+  # danach die Seite, auf der der Wuerfel innerhalb der Karenzzeit abgelegt wurde
   - id: break_hold_side
     type: int
     restore_value: no
     initial_value: '0'
 
-  # Start der Doppelklick-Pause: in den ersten 15s wird der Wuerfel abgelegt, ohne die Pause zu beenden
+  # Start der Doppelklick-Pause (fuer die Karenzzeit break_grace_seconds)
   - id: break_lock_start
     type: unsigned long
     restore_value: no
@@ -558,10 +735,10 @@ script:
             }
             if (new_side == 0) id(break_hold_side) = 0;  // jetzt physisch auf der Ecke
           }
-          
+
           // Kein Unterschied zur aktuell bestätigten Seite -> nichts zu tun
           if (new_side == id(last_side)) return;
-          
+
           // Nur Timer (neu) starten, wenn wir noch nicht schon auf genau diese Seite debouncen
           if (!id(is_debouncing) || new_side != id(pending_side)) {
             id(pending_side) = new_side;
@@ -575,26 +752,26 @@ script:
     then:
       - lambda: |-
           if (!id(is_debouncing)) return;
-          
+
           int current = (int)id(current_side).state;
-          
+
           // Seite hat sich während der Debounce-Zeit nochmal geändert
           if (current != id(pending_side)) {
             id(pending_side) = current;
             id(debounce_start) = millis();
             return;
           }
-          
-          // 2s stabil? -> bestätigen
-          if (millis() - id(debounce_start) > 2000) {
+
+          // Lange genug stabil? -> bestaetigen
+          if (millis() - id(debounce_start) > (uint32_t)(id(debounce_seconds).state * 1000.0f)) {
             id(is_debouncing) = false;
 
-            // Innerhalb 15s nach Doppelklick: Wuerfel wird in der Pause abgelegt,
+            // Kurz nach Doppelklick: Wuerfel wird in der Pause abgelegt,
             // die neue Seite gehoert zur Pause (erst ein spaeterer Flip/Klick beendet sie)
             if (id(last_side) == 0 && id(break_lock_start) > 0 &&
-                millis() - id(break_lock_start) < 15000) {
+                millis() - id(break_lock_start) < (uint32_t)(id(break_grace_seconds).state * 1000.0f)) {
               id(break_hold_side) = current;
-              id(led_blink).execute(0.0f, 1.0f, 0.8f);  // Tuerkis: Pause bleibt
+              id(led_blink).execute(id(break_red).state / 100.0f, id(break_green).state / 100.0f, id(break_blue).state / 100.0f);  // Pause bleibt
               ESP_LOGI("timecube", "Pause: Wuerfel auf Seite %d abgelegt", current);
               return;
             }
@@ -630,7 +807,7 @@ script:
             id(green_flash_until) = millis() + 5000;
           } else {
             id(green_flash_until) = 0;
-            id(led_blink).execute(0.0f, 1.0f, 0.8f);  // Tuerkis: Pause beginnt
+            id(led_blink).execute(id(break_red).state / 100.0f, id(break_green).state / 100.0f, id(break_blue).state / 100.0f);  // Pause beginnt
           }
 
           ESP_LOGI("timecube", "Side confirmed: %d (%s)", side, id(current_activity).state.c_str());
@@ -638,9 +815,9 @@ script:
   - id: update_led
     then:
       - lambda: |-
-          ESP_LOGD("timecube", "update_led: wifi=%d debounce=%d green_until=%lu now=%lu", 
+          ESP_LOGD("timecube", "update_led: wifi=%d debounce=%d green_until=%lu now=%lu",
            id(wifi_connected), id(is_debouncing), id(green_flash_until), millis());
-          
+
           if (id(led_override_active)) return;  // Reminder-Blinken läuft, nicht stören
 
           // WiFi per Taster abgeschaltet -> LED aus
@@ -697,8 +874,9 @@ script:
             float phase = (millis() % 4000) / 4000.0f;
             float tri = phase < 0.5f ? phase * 2.0f : (1.0f - phase) * 2.0f;
             auto call = id(status_led).turn_on();
-            call.set_rgb(0.0f, 1.0f, 0.8f);
-            call.set_brightness(0.03f + 0.15f * tri);
+            float peak = id(break_led_brightness).state / 100.0f;
+            call.set_rgb(id(break_red).state / 100.0f, id(break_green).state / 100.0f, id(break_blue).state / 100.0f);
+            call.set_brightness(peak / 6.0f + (peak - peak / 6.0f) * tri);
             call.perform();
             return;
           }
