@@ -18,21 +18,19 @@ Time Cube is a small DIY cube that tracks your time. Each face stands for an act
 
 ## Features
 
-- **Orientation-based tracking.** Each of the 6 faces is one activity.
-- **Breaks.** Put the cube on a corner, or double-click the button, to log a break ("Pause").
-- **Button control.** A single click resumes tracking, a double click starts a break, and holding the button toggles WiFi.
-- **Tracking reminder.** A short orange blink every X minutes shows that tracking is running.
-- **Auto-stop.** Tracking ends on its own after X hours on one face, so a forgotten cube doesn't log the whole night.
-- **Long-term local storage.** A ring buffer holds about 88,000 entries, roughly 4 years at a 25-minute average session.
-- **Power-loss protection.** An unfinished session is recovered after a reboot, losing at most about 60 s.
-- **Built-in analytics.** The cube serves its own `/analytics` page with pie charts, a monthly breakdown and a daily view.
-- **Standalone and open source.** It runs on your local network and can be fully customised through ESPHome.
+- **Orientation-based tracking** - Each of the 6 faces is one activity.
+- **Breaks** - Put the cube on a corner, or double-click the button, to log a break ("Pause").
+- **Button control** - A single click resumes tracking, a double click starts a break, and holding the button toggles WiFi.
+- **Tracking reminder** - A short orange blink every X minutes (defined in the web UI) shows that tracking is running.
+- **Auto-stop** - Tracking ends on its own after X hours (defined in the web UI) on one face, so a forgotten cube doesn't log the whole night.
+- **Long-term local storage** - A ring buffer holds about 88,000 entries, roughly 4 years at a 25-minute average session.
+- **Power-loss protection** - An unfinished session is recovered after a reboot, losing at most about 60 s.
+- **Built-in analytics** - The cube serves its own `/analytics` page with pie charts, a monthly breakdown and a daily view, and the option to download the data as csv.
+- **Standalone and open source** - It runs on your local network and can be fully customised through ESPHome.
 
 ---
 
 ## Using the cube
-
-### Gestures
 
 | Action                         | Result                                                                    |
 | ------------------------------ | ------------------------------------------------------------------------- |
@@ -72,7 +70,7 @@ Short one-off flashes:
 
 | Component    | Specification                                  |
 | ------------ | ---------------------------------------------- |
-| MCU          | ESP32-S3 SuperMini (ESP32-S3FH4R2, 4 MB flash) |
+| MCU          | ESP32-S3 SuperMini (4 MB flash) |
 | IMU          | MPU-6050 (I2C)                                 |
 | LED          | Onboard WS2812B (GPIO 48)                      |
 | Button       | Momentary push button                          |
@@ -115,13 +113,13 @@ source ~/.venvs/esphome/bin/activate
 pip install esphome
 
 # sanity check: compile only, no device needed
-esphome compile ESPHome_config/timecube.yaml
+esphome compile /Path.../ESPHome_config/timecube.yaml
 
 # compile and flash over USB (asks for the serial port)
-esphome run ESPHome_config/timecube.yaml
+esphome run /Path.../ESPHome_config/timecube.yaml
 
 # follow the device logs
-esphome logs ESPHome_config/timecube.yaml
+esphome logs /Path.../ESPHome_config/timecube.yaml
 ```
 
 OTA is disabled, so firmware updates are done over USB only.
