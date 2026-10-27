@@ -15,8 +15,9 @@ inner_cavity_depth = 28; // height of the upper internal cavity where the parts 
 inner_cavity_wall = 2;   // wall thickness around the internal cavity [mm]
 
 snap_tab_inset = 4;       // distance of the snap tabs from the cover edge [mm]
-snap_tab_width = 3.2;     // width of each snap tab [mm]
-snap_tab_depth = 2.0;     // depth of each snap tab measured along the edge [mm]
+snap_tab_width = 3.2;     // width of each snap tab slot footprint; sets tab positions and recess size [mm]
+snap_tab_depth = 2.0;     // depth of each snap tab slot footprint measured along the edge [mm]
+snap_tab_shrink = 0.10;   // per-side shrink of the tab body inside the footprint; tune this if the lid is too tight/loose [mm]
 snap_tab_height = 2.2;   // how far the tab protrudes below the lid [mm]
 snap_recess_extra = 0.15; // total extra clearance for the matching recess, split across both sides [mm]
 snap_tab_chamfer = 0.4;   // lead-in taper at the tab tip [mm]
@@ -25,7 +26,7 @@ snap_rib_crush = 0.15;    // how far each rib protrudes from the tab face; excee
 
 rabbet_width = 1;         // width of the stepped lip around the seam [mm]
 rabbet_height = 1;        // height of the stepped lip [mm]
-rabbet_clearance = 0.15;  // gap between the cover lip and the base step, horizontally and vertically [mm]
+rabbet_clearance = 0.22;  // gap between the cover lip and the base step, horizontally and vertically [mm]
 
 battery_length = 25;  // battery pocket length, along X [mm]
 battery_width = 6.2;    // battery pocket width, along Y [mm]
@@ -143,7 +144,7 @@ corridor_width = 5;        // width of the side (Y-bar) corridor, along X [mm]
 corridor_x_min = size / 2 + esp_width / 2 + wire_clearance; // just clear of the wider (ESP) board
 corridor_y_start = battery_offset_y + battery_width;        // battery's back edge
 
-barrier_notch_width = 8;     // X width of the cut through the battery/ESP wall, for the ESP's +/- solder joints [mm]
+barrier_notch_width = 12;     // X width of the cut through the battery/ESP wall, for the ESP's +/- solder joints [mm]
 barrier_notch_x_start = size / 2 + esp_width / 2 - barrier_notch_width; // flush with the ESP's high-X edge, where the corridor begins [mm]
 
 spur_battery_width = 4;     // channel<->corridor spur width, sized for the battery's 2 cables [mm]
@@ -272,15 +273,20 @@ module inset_rounded_cube(inset) {
 // lead-in; crush ribs on the Y faces take up the recess clearance.
 module snap_tab() {
     c = snap_tab_chamfer;
-    hull() {
-        translate([c, c, 0])
-            cube([snap_tab_width - 2 * c, snap_tab_depth - 2 * c, eps]);
-        translate([0, 0, c])
-            cube([snap_tab_width, snap_tab_depth, snap_tab_height - c + eps]); // eps: overlap into the cover
+    w = snap_tab_width - 2 * snap_tab_shrink;
+    d = snap_tab_depth - 2 * snap_tab_shrink;
+    // body is centered in the footprint that positions the base recess
+    translate([snap_tab_shrink, snap_tab_shrink, 0]) {
+        hull() {
+            translate([c, c, 0])
+                cube([w - 2 * c, d - 2 * c, eps]);
+            translate([0, 0, c])
+                cube([w, d, snap_tab_height - c + eps]); // eps: overlap into the cover
+        }
+        for (y = [-snap_rib_crush, d - eps])
+            translate([(w - snap_rib_width) / 2, y, c])
+                cube([snap_rib_width, snap_rib_crush + eps, snap_tab_height - c]);
     }
-    for (y = [-snap_rib_crush, snap_tab_depth - eps])
-        translate([(snap_tab_width - snap_rib_width) / 2, y, c])
-            cube([snap_rib_width, snap_rib_crush + eps, snap_tab_height - c]);
 }
 
 module base() {
@@ -372,7 +378,7 @@ module cover() {
             }
             // hollow the lip so only a rim ring hangs below the mating face
             intersection() {
-                inset_rounded_cube(rabbet_width + rabbet_clearance);
+                inset_rounded_cube(rabbet_width - rabbet_clearance);
                 translate([-1, -1, size - split_h - rabbet_height])
                     cube([size + 2, size + 2, rabbet_height]);
             }
