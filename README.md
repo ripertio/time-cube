@@ -1,8 +1,13 @@
 # Time Cube — a physical time tracker (ESP32-S3)
+![Timecube](assents/timecube_image.jpeg)
 
 > **Work in progress.** The core features work. A few are still waiting for real-world verification (see [Status](#status)).
 
-Time Cube is a small DIY cube that tracks your time. Each face stands for an activity: flip the cube and it starts tracking that activity. It needs no app, no cloud and no phone. Everything is stored on the device and can be viewed or exported through its local web interface.
+**Ever wonder where your whole working day went? And whether you spend your time on the things you actually want to?**
+
+Time Cube is a small DIY cube that answers that without making tracking a job of its own. Each face stands for an activity: flip the cube and it starts tracking that activity. At the end of the day, week or month you can compare your plan with reality: how much focus time did you really get, and how much went to meetings or admin?
+
+It needs no app, no cloud and no phone. Everything is stored on the device and can be viewed or exported through its local web interface.
 
 ## Contents
 
@@ -28,6 +33,8 @@ Time Cube is a small DIY cube that tracks your time. Each face stands for an act
 - **Built-in analytics** - The cube serves its own `/analytics` page with pie charts, a monthly breakdown and a daily view, and the option to download the data as csv.
 - **Standalone and open source** - It runs on your local network and can be fully customised through ESPHome.
 
+![timecube_gif](assents/timecube_in_action.gif)
+
 ---
 
 ## Using the cube
@@ -48,14 +55,16 @@ Listed in priority order: the first state that applies is shown.
 
 | State                          | Color     | Pattern                  |
 | ------------------------------ | --------- | ------------------------ |
-| WiFi turned off with the button | —        | Off                      |
 | Booting / WiFi never connected | Yellow    | Slow blink               |
 | WiFi connection lost           | Red       | Fast blink               |
 | New face confirmed             | Green     | Solid for 5 s            |
 | Face change detected (debounce)| White     | Dim solid                |
 | Stopped by the time limit      | Purple    | Dim solid                |
 | On a break                     | Turquoise | Slow, soft pulse         |
+| WiFi turned off with the button | —        | Off (only when none of the states above apply) |
 | Tracking / idle                | Blue      | Solid (brightness configurable) |
+
+The yellow and red WiFi blinks only show while WiFi is enabled. With WiFi turned off, the LED still shows all tracking states and goes dark only when idle.
 
 Short one-off flashes:
 
@@ -79,6 +88,12 @@ Short one-off flashes:
 | Enclosure    | 3D-printed, ~5×5×5 cm, translucent PLA         |
 
 The enclosure files are in [3D_files/](3D_files/). Assembly notes are in [buildguide.md](buildguide.md).
+
+### Cost and what you need
+
+About **€15 per cube** when ordered from AliExpress. The LiPo is usually sold with the TP4056 charger board already attached, and the button and slide switch cost very little.
+
+To build one you need a 3D printer, a soldering iron, the parts above and a USB cable: print the case, solder the IMU, button, battery and charger to the ESP32-S3, then flash the ESPHome firmware.
 
 ### Wiring
 
@@ -214,8 +229,6 @@ The Home Assistant API also provides the services `set_activity_name`, `export_c
 ### Known issues
 
 - When several clients connect at once (for example several browser tabs plus the VS Code extension), `/events` (the live-update stream of the device page) sometimes fails with `net::ERR_CONNECTION_RESET`. The likely cause is the small limit on concurrent sockets in the ESP32 httpd. The browser reconnects automatically, so this is cosmetic.
-
-See [WIP_Objectives.md](WIP_Objectives.md) for the roadmap.
 
 ---
 
