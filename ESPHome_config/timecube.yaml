@@ -820,14 +820,8 @@ script:
 
           if (id(led_override_active)) return;  // Reminder-Blinken läuft, nicht stören
 
-          // WiFi per Taster abgeschaltet -> LED aus
-          if (!id(wifi_user_enabled)) {
-            id(status_led).turn_off().perform();
-            return;
-          }
-
-          // WiFi nicht verbunden
-          if (!id(wifi_connected)) {
+          // WiFi nicht verbunden (nur wenn WiFi per Taster nicht abgeschaltet wurde)
+          if (id(wifi_user_enabled) && !id(wifi_connected)) {
             unsigned long period = id(wifi_ever_connected) ? 300 : 1000; // rot schnell / gelb langsam
             bool on_phase = (millis() % period) < (period / 2);
             auto call = id(status_led).turn_on();
@@ -878,6 +872,12 @@ script:
             call.set_rgb(id(break_red).state / 100.0f, id(break_green).state / 100.0f, id(break_blue).state / 100.0f);
             call.set_brightness(peak / 6.0f + (peak - peak / 6.0f) * tri);
             call.perform();
+            return;
+          }
+
+          // WiFi per Taster abgeschaltet, sonst nichts anzuzeigen -> LED aus
+          if (!id(wifi_user_enabled)) {
+            id(status_led).turn_off().perform();
             return;
           }
 
